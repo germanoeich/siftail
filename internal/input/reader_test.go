@@ -171,6 +171,7 @@ func TestFanIn_CancelStopsAll(t *testing.T) {
 	fanIn := NewFanIn(reader1, reader2)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	eventCh, errCh := fanIn.Start(ctx)
 

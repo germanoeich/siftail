@@ -28,10 +28,8 @@ func TestRing_AppendAndWrap(t *testing.T) {
 		{Line: "event3", Time: time.Now()},
 	}
 
-	var storedEvents []LogEvent
 	for _, e := range events {
 		stored := ring.Append(e)
-		storedEvents = append(storedEvents, stored)
 
 		// Verify sequence numbers are assigned
 		if stored.Seq == 0 {
