@@ -12,7 +12,7 @@ func TestMain_BuildsAndPrintsHelp(t *testing.T) {
 	if err := buildCmd.Run(); t.Failed() {
 		t.Fatalf("Failed to build siftail: %v", err)
 	}
-	
+
 	// Clean up the test binary afterwards
 	defer func() {
 		_ = exec.Command("rm", "-f", "siftail_test").Run()
@@ -26,16 +26,16 @@ func TestMain_BuildsAndPrintsHelp(t *testing.T) {
 	}
 
 	usage := string(output)
-	
+
 	// Assert that usage contains all three modes
 	if !strings.Contains(usage, "docker") {
 		t.Error("Usage should mention 'docker' mode")
 	}
-	
+
 	if !strings.Contains(usage, "stdin") {
 		t.Error("Usage should mention 'stdin' mode")
 	}
-	
+
 	if !strings.Contains(usage, "file") {
 		t.Error("Usage should mention 'file' mode")
 	}
@@ -43,10 +43,10 @@ func TestMain_BuildsAndPrintsHelp(t *testing.T) {
 	// Verify it shows the expected usage patterns
 	expectedPatterns := []string{
 		"siftail [flags] [file]",
-		"siftail docker", 
+		"siftail docker",
 		"<command> | siftail",
 	}
-	
+
 	for _, pattern := range expectedPatterns {
 		if !strings.Contains(usage, pattern) {
 			t.Errorf("Usage should contain pattern: %s", pattern)

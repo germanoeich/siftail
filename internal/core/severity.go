@@ -166,8 +166,8 @@ type SeverityDetector interface {
 
 // DefaultSeverityDetector implements the standard severity detection logic
 type DefaultSeverityDetector struct {
-	levelMap      *LevelMap
-	bracketedRe   *regexp.Regexp
+	levelMap        *LevelMap
+	bracketedRe     *regexp.Regexp
 	customBracketRe *regexp.Regexp
 }
 
@@ -175,7 +175,7 @@ type DefaultSeverityDetector struct {
 func NewDefaultSeverityDetector(levelMap *LevelMap) *DefaultSeverityDetector {
 	// Regex for known level patterns (case-insensitive)
 	bracketedRe := regexp.MustCompile(`(?i)(?:[\[\(<]|\b)(DEBUG|TRACE|INFO|NOTICE|WARN|WARNING|ERROR|ERR|FATAL|CRITICAL|ALERT|EMERG|EMERGENCY)(?:[\]\)>]|\b|:)`)
-	
+
 	// Regex for custom levels in brackets - any uppercase word in brackets
 	customBracketRe := regexp.MustCompile(`\[([A-Z][A-Z0-9]*)\]`)
 
@@ -189,7 +189,7 @@ func NewDefaultSeverityDetector(levelMap *LevelMap) *DefaultSeverityDetector {
 // Detect attempts to extract the severity level from a log line
 func (d *DefaultSeverityDetector) Detect(line string) (levelStr string, level Severity, ok bool) {
 	trimmed := strings.TrimSpace(line)
-	
+
 	// Try JSON first (fast check)
 	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
 		if levelStr, level, ok := d.detectJSON(trimmed); ok {
@@ -219,7 +219,7 @@ func (d *DefaultSeverityDetector) detectJSON(line string) (string, Severity, boo
 
 	// Check various level field names (case-insensitive by converting keys)
 	levelKeys := []string{"level", "lvl", "severity", "sev", "log.level", "priority"}
-	
+
 	for _, key := range levelKeys {
 		// Check exact match first
 		if val, exists := obj[key]; exists {
@@ -227,7 +227,7 @@ func (d *DefaultSeverityDetector) detectJSON(line string) (string, Severity, boo
 				return levelStr, d.stringToSeverity(levelStr), true
 			}
 		}
-		
+
 		// Check case-insensitive
 		for objKey, val := range obj {
 			if strings.EqualFold(objKey, key) {
@@ -245,27 +245,27 @@ func (d *DefaultSeverityDetector) detectJSON(line string) (string, Severity, boo
 func (d *DefaultSeverityDetector) detectLogfmt(line string) (string, Severity, bool) {
 	// Simple logfmt parsing - split by spaces and look for key=value
 	parts := strings.Fields(line)
-	
+
 	for _, part := range parts {
 		if strings.Contains(part, "=") {
 			kv := strings.SplitN(part, "=", 2)
 			if len(kv) == 2 {
 				key := strings.ToLower(strings.TrimSpace(kv[0]))
 				value := strings.TrimSpace(kv[1])
-				
+
 				// Skip if value is empty after trimming
 				if value == "" {
 					continue
 				}
-				
+
 				// Remove quotes if present
 				value = strings.Trim(value, `"'`)
-				
+
 				// Skip if value is empty after removing quotes
 				if value == "" {
 					continue
 				}
-				
+
 				// Check if this is a level key
 				levelKeys := []string{"level", "lvl", "severity", "sev", "priority"}
 				for _, levelKey := range levelKeys {
@@ -276,7 +276,7 @@ func (d *DefaultSeverityDetector) detectLogfmt(line string) (string, Severity, b
 			}
 		}
 	}
-	
+
 	return "", SevUnknown, false
 }
 
@@ -293,14 +293,14 @@ func (d *DefaultSeverityDetector) detectBracketed(line string) (string, Severity
 			}
 		}
 	}
-	
+
 	// Try custom bracket patterns
 	matches = d.customBracketRe.FindStringSubmatch(line)
 	if len(matches) > 1 && matches[1] != "" {
 		levelStr := matches[1]
 		return levelStr, d.stringToSeverity(levelStr), true
 	}
-	
+
 	return "", SevUnknown, false
 }
 
@@ -331,7 +331,7 @@ func (d *DefaultSeverityDetector) extractStringValue(val interface{}) string {
 // stringToSeverity converts a level string to a Severity enum
 func (d *DefaultSeverityDetector) stringToSeverity(levelStr string) Severity {
 	normalized := strings.ToUpper(strings.Trim(levelStr, "[]<>: "))
-	
+
 	// Map to default severities only for exact matches of the 4 main levels
 	switch normalized {
 	case "DEBUG":
@@ -347,7 +347,7 @@ func (d *DefaultSeverityDetector) stringToSeverity(levelStr string) Severity {
 		d.levelMap.GetOrAssignIndex(normalized)
 		return SevWarn
 	case "ERR":
-		// Special case: ERR maps to ERROR severity but also gets dynamic slot  
+		// Special case: ERR maps to ERROR severity but also gets dynamic slot
 		d.levelMap.GetOrAssignIndex(normalized)
 		return SevError
 	default:
