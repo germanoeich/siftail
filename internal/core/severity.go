@@ -57,7 +57,7 @@ func NewLevelMap() *LevelMap {
 	}
 
 	// Set up default mappings: 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR
-	defaults := []string{"", "DEBUG", "INFO", "WARN", "ERROR", "", "", "", "", ""}
+	defaults := []string{"", "DEBUG", "INFO", "WARN", "ERROR", "", "", "", "", "OTHER"}
 	copy(lm.IndexToName, defaults)
 
 	for i := 1; i <= 9; i++ {
@@ -82,8 +82,8 @@ func (lm *LevelMap) GetOrAssignIndex(levelStr string) int {
 		return index
 	}
 
-	// Find next available slot (5-9)
-	for i := 5; i <= 9; i++ {
+	// Find next available slot (5-8). Slot 9 is reserved for OTHER.
+	for i := 5; i <= 8; i++ {
 		if lm.IndexToName[i] == "" {
 			lm.IndexToName[i] = normalized
 			lm.NameToIndex[normalized] = i
@@ -92,16 +92,11 @@ func (lm *LevelMap) GetOrAssignIndex(levelStr string) int {
 		}
 	}
 
-	// All slots full, assign to OTHER (slot 9)
-	if lm.IndexToName[9] != "OTHER" {
-		// Need to move any existing level 9 to OTHER bucket
-		if oldName := lm.IndexToName[9]; oldName != "" && oldName != "OTHER" {
-			delete(lm.NameToIndex, oldName)
-		}
-		lm.IndexToName[9] = "OTHER"
-		lm.NameToIndex["OTHER"] = 9
-		lm.Enabled[9] = true
-	}
+	// All slots full, map to OTHER (slot 9)
+	// Keep label at position 9 as OTHER always.
+	lm.IndexToName[9] = "OTHER"
+	lm.NameToIndex["OTHER"] = 9
+	lm.Enabled[9] = true
 	lm.NameToIndex[normalized] = 9
 
 	return 9
@@ -125,6 +120,27 @@ func (lm *LevelMap) Toggle(index int) {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 	lm.Enabled[index] = !lm.Enabled[index]
+}
+
+// Focus enables only the given index and disables all others (1-9).
+func (lm *LevelMap) Focus(index int) {
+	if index < 1 || index > 9 {
+		return
+	}
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+	for i := 1; i <= 9; i++ {
+		lm.Enabled[i] = (i == index)
+	}
+}
+
+// EnableAll sets all severity buckets 1..9 to enabled.
+func (lm *LevelMap) EnableAll() {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+	for i := 1; i <= 9; i++ {
+		lm.Enabled[i] = true
+	}
 }
 
 // GetSnapshot returns a read-only snapshot of the current state

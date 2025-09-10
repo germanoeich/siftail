@@ -222,9 +222,10 @@ func wireEventStream(ctx context.Context, events <-chan core.LogEvent, errs <-ch
 				if !ok {
 					return
 				}
-				ring.Append(e)
-				// Trigger a refresh in the UI without blocking
+				e = ring.Append(e)
+				// Notify UI of the new event (so find can index incrementally)
 				if ui != nil {
+					ui.Send(tui.LogAppendedMsg{Event: e})
 					ui.Send(tui.RefreshCmd()())
 				}
 			}

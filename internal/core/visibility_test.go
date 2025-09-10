@@ -80,7 +80,7 @@ func TestSeverity_DiscoveryUpdatesToolbar(t *testing.T) {
 	indexToName, enabled := levelMap.GetSnapshot()
 
 	// Check default mappings
-	expectedDefaults := []string{"", "DEBUG", "INFO", "WARN", "ERROR", "", "", "", "", ""}
+	expectedDefaults := []string{"", "DEBUG", "INFO", "WARN", "ERROR", "", "", "", "", "OTHER"}
 	for i, expected := range expectedDefaults {
 		if indexToName[i] != expected {
 			t.Errorf("Default mapping %d: expected '%s', got '%s'", i, expected, indexToName[i])
@@ -119,7 +119,7 @@ func TestSeverity_DiscoveryUpdatesToolbar(t *testing.T) {
 		6: "NOTICE",
 		7: "ALERT",
 		8: "CRITICAL",
-		9: "", // Should still be empty
+		9: "OTHER", // Always present
 	}
 
 	for index, expectedName := range expectedMappings {

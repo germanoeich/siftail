@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/germanoeich/siftail/internal/core"
 	"github.com/germanoeich/siftail/internal/persist"
 )
@@ -69,6 +68,10 @@ type Model struct {
 	dockerUI DockerUIState
 	presets  *persist.PresetsManager
 
+	// Clear menu state
+	clearMenuOpen bool
+	clearMenuSel  int // 0..N-1
+
 	// Performance configuration
 	perf PerformanceConfig
 
@@ -83,6 +86,9 @@ type Model struct {
 	// Throttling for smooth updates
 	lastRender time.Time
 	dirty      bool // needs re-render
+
+	// Sequence -> current line index mapping
+	seqIndex map[uint64]int
 }
 
 // NewModel creates a new TUI model with default configuration
@@ -117,8 +123,9 @@ func NewModel(ring *core.Ring, filters *core.Filters, search *core.SearchState, 
 			MaxLineLength:  2048,                  // 2KB per line max
 			RenderThrottle: 33 * time.Millisecond, // ~30 FPS
 		},
-		width:  80,
-		height: 24,
+		width:    80,
+		height:   24,
+		seqIndex: make(map[uint64]int),
 	}
 }
 
@@ -197,6 +204,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "r":
 				m = m.refreshPresetsList()
 			}
+		} else if m.clearMenuOpen {
+			// Clear menu navigation and actions
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "esc", "c":
+				m.clearMenuOpen = false
+			case "up":
+				if m.clearMenuSel > 0 {
+					m.clearMenuSel--
+				} else {
+					m.clearMenuSel = 3
+				}
+			case "down":
+				if m.clearMenuSel < 3 {
+					m.clearMenuSel++
+				} else {
+					m.clearMenuSel = 0
+				}
+			case "enter":
+				m = m.invokeClearMenuSelection()
+			case "h":
+				m.filters.ClearHighlights()
+				m.clearMenuOpen = false
+				m.dirty = true
+			case "i":
+				m.filters.ClearIncludes()
+				m.clearMenuOpen = false
+				m.dirty = true
+			case "u":
+				m.filters.ClearExcludes()
+				m.clearMenuOpen = false
+				m.dirty = true
+			case "a":
+				m = m.clearAllFilters()
+				m.clearMenuOpen = false
+			}
 		} else {
 			// Handle main app keys
 			switch msg.String() {
@@ -212,6 +256,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.startPrompt(PromptFilterIn, "Filter In: ")
 			case "U":
 				m = m.startPrompt(PromptFilterOut, "Filter Out: ")
+			case "0":
+				m.levels.EnableAll()
+				m.dirty = true
+			case "home":
+				m.vp.GotoTop()
+				m.followTail = false
+			case "end":
+				m.vp.GotoBottom()
+				m.followTail = true
+			case "esc":
+				if m.search.IsActive() {
+					m.search.Clear()
+					m.search.SetActive(false)
+					m.dirty = true
+					break
+				}
+			case "c":
+				m.clearMenuOpen = true
+				m.clearMenuSel = 0
+			case "C":
+				m = m.clearAllFilters()
 
 			// Find navigation (only when find is active)
 			case "up":
@@ -228,6 +293,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				level := int(msg.String()[0] - '0')
 				m.levels.Toggle(level)
 				m.dirty = true
+			// Severity focus with Shift+Number
+			case "!", "@", "#", "$", "%", "^", "&", "*", "(":
+				// Map shifted symbols to indices 1..9
+				sym := msg.String()
+				idx := 0
+				switch sym {
+				case "!":
+					idx = 1
+				case "@":
+					idx = 2
+				case "#":
+					idx = 3
+				case "$":
+					idx = 4
+				case "%":
+					idx = 5
+				case "^":
+					idx = 6
+				case "&":
+					idx = 7
+				case "*":
+					idx = 8
+				case "(":
+					idx = 9
+				}
+				if idx > 0 {
+					m.levels.Focus(idx)
+					m.dirty = true
+				}
 
 			// Docker mode keys
 			case "l":
@@ -248,7 +342,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = m.setError("Attempting to reconnect to Docker...")
 				}
 
-			// Viewport navigation
+				// Viewport navigation
 			default:
 				var cmd tea.Cmd
 				m.vp, cmd = m.vp.Update(msg)
@@ -265,6 +359,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshMsg:
 		// Force refresh of visible content
 		m = m.refreshContent()
+
+	case LogAppendedMsg:
+		// When find is active, add new hits incrementally
+		if m.search.IsActive() {
+			matcher := m.search.GetMatcher()
+			if matcher.Match(msg.Event.Line) {
+				m.search.AddHit(msg.Event.Seq)
+				// If we’re following tail and this is a new match, optionally auto-jump?
+				// Keeping behavior passive; user navigates with up/down.
+			}
+		}
 
 	case DockerContainersMsg:
 		// Update container list from Docker reader
@@ -394,9 +499,29 @@ func (m Model) navigateFind(isPrev bool) Model {
 
 // scrollToSequence scrolls the viewport to show the event with the given sequence number
 func (m Model) scrollToSequence(seq uint64) Model {
-	// TODO: Implement scrolling to specific sequence
-	// This requires mapping sequence numbers to viewport line positions
+	// Look up line index for sequence; rebuild mapping if necessary
+	idx, ok := m.seqIndex[seq]
+	if !ok {
+		plan := core.VisiblePlan{Include: m.filters, LevelMap: m.levels, DockerVisible: m.dockerUI.Containers}
+		events := core.ComputeVisible(m.ring.Snapshot(), plan)
+		m.seqIndex = make(map[uint64]int, len(events))
+		for i, e := range events {
+			m.seqIndex[e.Seq] = i
+		}
+		idx, ok = m.seqIndex[seq]
+		if !ok {
+			return m
+		}
+	}
+
+	// Scroll so the target line is near the middle, within bounds
+	target := idx - m.vp.Height/2
+	if target < 0 {
+		target = 0
+	}
+	m.vp.SetYOffset(target)
 	m.followTail = false
+	m.dirty = true
 	return m
 }
 
@@ -459,9 +584,14 @@ func (m Model) updateViewportContent() Model {
 
 	events := m.ring.Snapshot()
 	visibleEvents := core.ComputeVisible(events, plan)
+	// Build index for quick scrolling to sequences
+	m.seqIndex = make(map[uint64]int, len(visibleEvents))
+	for i, e := range visibleEvents {
+		m.seqIndex[e.Seq] = i
+	}
 
 	// Render events to viewport content
-	content := m.renderBasicEvents(visibleEvents)
+	content := m.renderEventsWithFullStyling(visibleEvents)
 	m.vp.SetContent(content)
 
 	// Auto-scroll if following tail
@@ -474,48 +604,25 @@ func (m Model) updateViewportContent() Model {
 
 // renderBasicEvents converts log events to basic styled viewport content
 func (m Model) renderBasicEvents(events []core.LogEvent) string {
-	if len(events) == 0 {
-		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")).
-			Render("No log entries...")
-	}
-
-	var lines []string
-	for _, event := range events {
-		line := m.renderEvent(event)
-		lines = append(lines, line)
-	}
-
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	// Deprecated basic renderer kept for reference; full styling now used.
+	return m.renderEventsWithFullStyling(events)
 }
 
 // renderEvent formats a single log event with styling
 func (m Model) renderEvent(event core.LogEvent) string {
-	// Apply line truncation first
-	line := m.truncateLine(event.Line)
-
-	// Add container prefix for Docker mode
-	if m.mode == ModeDocker && event.Container != "" {
-		containerStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("33")).
-			Bold(true)
-		line = containerStyle.Render("["+event.Container+"]") + " " + line
-	}
-
-	// Apply highlighting (check against original line for match)
-	if m.filters.ShouldHighlight(event.Line) {
-		line = lipgloss.NewStyle().
-			Background(lipgloss.Color("11")).
-			Foreground(lipgloss.Color("0")).
-			Render(line)
-	}
-
-	return line
+	// Use full styling path
+	return m.renderEventWithFullStyling(event)
 }
 
 // Message types for internal communication
 type tickMsg time.Time
 type refreshMsg struct{}
+
+// LogAppendedMsg notifies the model that a new log event was appended.
+// Used to incrementally update find hits when active.
+type LogAppendedMsg struct {
+	Event core.LogEvent
+}
 
 // DockerContainersMsg updates the list of available containers
 type DockerContainersMsg struct {
@@ -737,6 +844,40 @@ func (m Model) isErrorExpired() bool {
 	}
 	// Clear error after 5 seconds
 	return time.Since(m.errTime) > 5*time.Second
+}
+
+// clearAllFilters clears include, exclude, and highlight filters without
+// touching Docker visibility state.
+func (m Model) clearAllFilters() Model {
+	m.filters.ClearIncludes()
+	m.filters.ClearExcludes()
+	m.filters.ClearHighlights()
+	m.dirty = true
+	m.errMsg = "Cleared filters & highlights"
+	m.errTime = time.Now()
+	return m
+}
+
+// invokeClearMenuSelection performs the action for the current clear menu item.
+// 0: Clear Highlights, 1: Clear Includes, 2: Clear Excludes, 3: Clear All
+func (m Model) invokeClearMenuSelection() Model {
+	switch m.clearMenuSel {
+	case 0:
+		m.filters.ClearHighlights()
+		m.errMsg = "Highlights cleared"
+	case 1:
+		m.filters.ClearIncludes()
+		m.errMsg = "Include filters cleared"
+	case 2:
+		m.filters.ClearExcludes()
+		m.errMsg = "Exclude filters cleared"
+	case 3:
+		return m.clearAllFilters()
+	}
+	m.errTime = time.Now()
+	m.clearMenuOpen = false
+	m.dirty = true
+	return m
 }
 
 // DockerReconnectCmd returns a command to attempt Docker reconnection

@@ -133,6 +133,16 @@ func (m Model) View() string {
 		return overlayStyle.Render(overlay)
 	}
 
+	// Clear menu overlay
+	if m.clearMenuOpen {
+		overlay := m.renderClearMenu()
+		overlayStyle := lipgloss.NewStyle().
+			Align(lipgloss.Center, lipgloss.Center).
+			Width(m.width).
+			Height(m.height)
+		return overlayStyle.Render(overlay)
+	}
+
 	return baseView
 }
 
@@ -205,7 +215,7 @@ func (m Model) renderStatusLine() string {
 func (m Model) renderToolbar() string {
 	// First line: main hotkeys
 	var hotkeys []string
-	hotkeys = append(hotkeys, "^Q Quit", "^C Cancel", "PgUp/PgDn Scroll", "Wheel Scroll", "h Highlight", "f Find", "F Filter", "U FilterOut")
+	hotkeys = append(hotkeys, "^Q Quit", "Home/End", "PgUp/PgDn", "Wheel", "1..9 Toggle", "Shift+1..9 Focus", "h Highlight", "f Find", "F Filter", "U FilterOut", "c Clear", "C ClearAll")
 
 	if m.mode == ModeDocker {
 		hotkeys = append(hotkeys, "l Containers", "P Presets")
@@ -223,6 +233,36 @@ func (m Model) renderToolbar() string {
 	)
 
 	return toolbar
+}
+
+// renderClearMenu draws a small menu to clear filters/highlights selectively
+func (m Model) renderClearMenu() string {
+	items := []string{
+		"h: Clear Highlights",
+		"i: Clear Include Filters",
+		"u: Clear Exclude Filters",
+		"a: Clear ALL (filters + highlights)",
+	}
+
+	var lines []string
+	lines = append(lines, "Clear Menu (Esc/c to close, Enter to apply)")
+	lines = append(lines, "")
+	for i, it := range items {
+		prefix := "  "
+		if i == m.clearMenuSel {
+			prefix = "> "
+		}
+		lines = append(lines, prefix+it)
+	}
+
+	content := strings.Join(lines, "\n")
+	overlay := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("205")).
+		Padding(1).
+		Width(min(50, m.width-4)).
+		Render(content)
+	return overlay
 }
 
 // renderLevelMapping shows the dynamic severity level mapping
@@ -288,15 +328,8 @@ func (m Model) renderEventsWithFullStyling(events []core.LogEvent) string {
 	}
 
 	var lines []string
-	maxLines := m.vp.Height
-
-	// Render only the visible portion to improve performance
-	startIdx := 0
-	if len(events) > maxLines {
-		startIdx = len(events) - maxLines
-	}
-
-	for i := startIdx; i < len(events); i++ {
+	lines = make([]string, 0, len(events))
+	for i := 0; i < len(events); i++ {
 		line := m.renderEventWithFullStyling(events[i])
 		lines = append(lines, line)
 	}

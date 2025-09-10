@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -425,5 +426,71 @@ func TestLineLength_Truncation(t *testing.T) {
 	notTruncated := model.truncateLine(shortLine)
 	if notTruncated != shortLine {
 		t.Errorf("Expected short line to remain unchanged, got %q", notTruncated)
+	}
+}
+
+// TestViewportScrollingAndFindJump ensures that the viewport receives full content
+// (so it can scroll) and that find navigation jumps to off-screen matches.
+func TestViewportScrollingAndFindJump(t *testing.T) {
+	ring := core.NewRing(1000)
+	filters := core.NewFilters()
+	search := core.NewSearchState()
+	levels := core.NewLevelMap()
+
+	m := *NewModel(ring, filters, search, levels, ModeFile)
+
+	// Set terminal size so viewport height is a known value: height 13 => vp.Height = 10
+	resize := tea.WindowSizeMsg{Width: 80, Height: 13}
+	nm, _ := m.Update(resize)
+	m = nm.(Model)
+	if m.vp.Height != 10 {
+		t.Fatalf("expected vp height 10, got %d", m.vp.Height)
+	}
+
+	// Append more than a page of events so scrolling is possible
+	needleIdx := 20
+	for i := 0; i < 100; i++ {
+		line := fmt.Sprintf("line-%03d", i)
+		if i == needleIdx {
+			line = "MARK-NEEDLE-20"
+		}
+		e := core.LogEvent{Line: line}
+		_ = ring.Append(e)
+	}
+
+	// Render content and auto-follow tail
+	m = m.updateViewportContent()
+	if !m.vp.AtBottom() {
+		t.Fatal("expected viewport at bottom after render with followTail")
+	}
+
+	// Scroll up a page; should no longer be at bottom and YOffset should be > 0
+	m.vp.PageUp()
+	if m.vp.AtBottom() {
+		t.Fatal("expected viewport not at bottom after PageUp; content may be truncated")
+	}
+	if m.vp.YOffset == 0 {
+		t.Fatal("expected YOffset > 0 after PageUp")
+	}
+
+	// Activate Find to match the needle and navigate to it; viewport should jump
+	matcher, _ := core.NewMatcher("NEEDLE")
+	m.search.SetMatcher(matcher)
+	m.search.SetActive(true)
+	m = m.refreshFindIndex()
+
+	// Jump to the first (and only) hit using our navigate helper
+	m = m.navigateFind(false)
+
+	// Expected position centers the match when possible
+	expected := needleIdx - m.vp.Height/2
+	if expected < 0 {
+		expected = 0
+	}
+	if m.vp.YOffset != expected {
+		t.Fatalf("expected YOffset %d after find jump, got %d", expected, m.vp.YOffset)
+	}
+	if m.followTail {
+		t.Fatal("expected followTail to be disabled after jumping to a match")
 	}
 }
