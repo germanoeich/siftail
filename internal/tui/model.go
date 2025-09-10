@@ -219,7 +219,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.helpOpen {
 			// Help overlay interactions
 			switch msg.String() {
-			case "q", "esc", "?", "enter":
+			case "q", "esc", "?", "enter", "f1":
 				m.helpOpen = false
 			}
 		} else if m.clearMenuOpen {
@@ -295,7 +295,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.clearMenuSel = 0
 			case "C":
 				m = m.clearAllFilters()
-			case "?":
+			case "?", "f1":
 				m.helpOpen = true
 
 				// Find navigation (only when find is active)

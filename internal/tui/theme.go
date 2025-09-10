@@ -45,7 +45,7 @@ func DarkTheme() *Theme {
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("201")).Foreground(lipgloss.Color("15")).Bold(true),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Bold(true),
-		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("15")).Padding(0, 0),
 		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
 		HotkeyLabelStyle: lipgloss.NewStyle().Faint(true),
 		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("246")).Italic(true),
@@ -70,7 +70,7 @@ func DraculaTheme() *Theme {
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("141")).Foreground(lipgloss.Color("231")).Bold(true),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("235")).Bold(true),
-		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("250")).Foreground(lipgloss.Color("235")).Padding(0, 1).MarginRight(1),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("250")).Foreground(lipgloss.Color("235")).Padding(0, 0),
 		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
 		HotkeyLabelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("60")),
 		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
@@ -95,7 +95,7 @@ func NordTheme() *Theme {
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("39")).Foreground(lipgloss.Color("230")).Bold(true),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Bold(true),
-		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("195")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("195")).Foreground(lipgloss.Color("0")).Padding(0, 0),
 		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
 		HotkeyLabelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("236")),
 		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
@@ -119,7 +119,7 @@ func LightTheme() *Theme {
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("171")).Foreground(lipgloss.Color("0")).Bold(true),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true),
-		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("253")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("253")).Foreground(lipgloss.Color("0")).Padding(0, 0),
 		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
 		HotkeyLabelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("60")),
 		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("60")).Italic(true),
