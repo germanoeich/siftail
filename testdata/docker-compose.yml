@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  app_text:
+    build: ./loggen
+    container_name: loggen_text
+    environment:
+      - MODE=text
+      - SERVICE_NAME=text
+
+  app_json:
+    build: ./loggen
+    container_name: loggen_json
+    environment:
+      - MODE=json
+      - SERVICE_NAME=json
+
+  app_mixed:
+    build: ./loggen
+    container_name: loggen_mixed
+    environment:
+      - MODE=mixed
+      - SERVICE_NAME=mixed
+
