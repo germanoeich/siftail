@@ -157,11 +157,10 @@ func (m Model) renderToolbar() string {
 	}
 
 	renderHK := func(k hk) string {
-		inner := lipgloss.JoinHorizontal(lipgloss.Left,
-			m.theme.HotkeyKeyStyle.Render(k.key),
-			lipgloss.NewStyle().PaddingLeft(1).Render(k.label),
-		)
-		return m.theme.HotkeyPillStyle.Render(inner)
+		// Only the key gets a background; the label stays plain/themed
+		key := m.theme.HotkeyPillStyle.Render(m.theme.HotkeyKeyStyle.Render(k.key))
+		label := m.theme.HotkeyLabelStyle.Render(" " + k.label)
+		return key + label
 	}
 
 	var pills []string
