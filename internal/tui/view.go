@@ -169,10 +169,10 @@ func (m Model) renderToolbar() string {
 	}
 	hotkeyLine := strings.Join(pills, "")
 
-	// Second line: severity level mapping (plain, no full-width background)
+	// Severity level mapping (now above hotkeys)
 	levelLine := m.theme.ToolbarStyle.Render(m.renderLevelMapping())
 
-	return lipgloss.JoinVertical(lipgloss.Left, hotkeyLine, levelLine)
+	return lipgloss.JoinVertical(lipgloss.Left, levelLine, hotkeyLine)
 }
 
 // renderClearMenu draws a small menu to clear filters/highlights selectively
