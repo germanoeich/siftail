@@ -26,6 +26,7 @@ type Config struct {
 	BufferSize  int
 	FromStart   bool
 	NumLines    int // file mode prefill; if <0, read whole file
+	Theme       string
 	NoColor     bool
 	TimeFormat  string
 	ShowHelp    bool
@@ -40,6 +41,7 @@ func DefaultConfig() Config {
 		NoColor:    false,
 		FromStart:  true, // default to read entire file
 		NumLines:   -1,   // unset
+		Theme:      "dark",
 	}
 }
 
@@ -58,6 +60,7 @@ func ParseArgs(args []string) (Config, error) {
 	fs.BoolVar(&config.FromStart, "from-start", config.FromStart, "start reading from beginning of file (file mode only; default true)")
 	fs.IntVar(&config.NumLines, "n", config.NumLines, "prefill last N lines (file mode only; overrides --from-start)")
 	fs.IntVar(&config.NumLines, "num-lines", config.NumLines, "prefill last N lines (file mode only; overrides --from-start)")
+	fs.StringVar(&config.Theme, "theme", config.Theme, "UI theme (dark, dracula, nord, light)")
 	fs.BoolVar(&config.NoColor, "no-color", config.NoColor, "disable colored output")
 	fs.StringVar(&config.TimeFormat, "time-format", config.TimeFormat, "timestamp format for display")
 	fs.BoolVar(&config.ShowHelp, "h", config.ShowHelp, "show help message")
@@ -195,6 +198,11 @@ func Run(config Config) error {
 		if err := startDockerReader(ctx, ring, levels, program); err != nil {
 			return fmt.Errorf("failed to start docker reader: %w", err)
 		}
+	}
+
+	// Apply theme prior to run
+	if config.Theme != "" {
+		model.SetTheme(config.Theme)
 	}
 
 	// Run the TUI (blocks until exit)
@@ -412,6 +420,7 @@ FLAGS:
   --buffer-size N              ring buffer size (default: 10000)
   --from-start                 start reading from beginning of file (file mode; default)
   -n, --num-lines N            prefill last N lines (file mode; overrides --from-start)
+  --theme NAME                 UI theme (dark, dracula, nord, light)
   --no-color                   disable colored output
   --time-format FORMAT         timestamp format (default: "15:04:05.000")
 

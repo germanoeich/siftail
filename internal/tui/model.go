@@ -89,6 +89,10 @@ type Model struct {
 
 	// Sequence -> current line index mapping
 	seqIndex map[uint64]int
+
+	// Theme
+	theme    *Theme
+	themeIdx int
 }
 
 // NewModel creates a new TUI model with default configuration
@@ -126,6 +130,8 @@ func NewModel(ring *core.Ring, filters *core.Filters, search *core.SearchState, 
 		width:    80,
 		height:   24,
 		seqIndex: make(map[uint64]int),
+		theme:    DarkTheme(),
+		themeIdx: 0,
 	}
 }
 
@@ -335,6 +341,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.dockerUI.SelectedPreset = 0
 					m = m.refreshPresetsList()
 				}
+			case "T":
+				// Cycle theme
+				m.themeIdx = (m.themeIdx + 1) % len(themes)
+				m.theme = themes[m.themeIdx]
+				m.dirty = true
 			case "R":
 				if m.mode == ModeDocker {
 					// Attempt Docker reconnection
@@ -388,6 +399,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// SetTheme applies the theme by name; falls back to dark.
+func (m *Model) SetTheme(name string) {
+	m.theme = themeByName(name)
+	// sync index for cycling
+	for i, t := range themes {
+		if t.Name == m.theme.Name {
+			m.themeIdx = i
+			break
+		}
+	}
+	m.dirty = true
 }
 
 // handleResize adjusts viewport and other components to new terminal size

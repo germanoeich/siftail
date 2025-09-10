@@ -10,83 +10,7 @@ import (
 	"github.com/germanoeich/siftail/internal/core"
 )
 
-// Styling constants and themes
-var (
-	// Color palette
-	colorDebug     = lipgloss.Color("240") // Gray
-	colorInfo      = lipgloss.Color("36")  // Cyan
-	colorWarn      = lipgloss.Color("11")  // Yellow
-	colorError     = lipgloss.Color("9")   // Red
-	colorOther     = lipgloss.Color("13")  // Magenta
-	colorContainer = lipgloss.Color("33")  // Blue
-	colorTimestamp = lipgloss.Color("240") // Gray
-
-	// Highlight colors
-	colorHighlight = lipgloss.Color("11")  // Yellow background
-	colorFindHit   = lipgloss.Color("201") // Pink background
-
-	// UI colors
-	colorToolbar   = lipgloss.Color("0")   // Black text
-	colorToolbarBg = lipgloss.Color("15")  // White background
-	colorStatus    = lipgloss.Color("240") // Gray text
-	colorPrompt    = lipgloss.Color("12")  // Bright blue
-
-	// Severity badge styles
-	debugBadgeStyle = lipgloss.NewStyle().
-			Foreground(colorDebug).
-			Bold(false)
-
-	infoBadgeStyle = lipgloss.NewStyle().
-			Foreground(colorInfo).
-			Bold(true)
-
-	warnBadgeStyle = lipgloss.NewStyle().
-			Foreground(colorWarn).
-			Bold(true)
-
-	errorBadgeStyle = lipgloss.NewStyle().
-			Foreground(colorError).
-			Bold(true)
-
-	otherBadgeStyle = lipgloss.NewStyle().
-			Foreground(colorOther).
-			Bold(true)
-
-	// Container name style
-	containerStyle = lipgloss.NewStyle().
-			Foreground(colorContainer).
-			Bold(true)
-
-	// Timestamp style
-	timestampStyle = lipgloss.NewStyle().
-			Foreground(colorTimestamp)
-
-	// Highlight styles
-	highlightStyle = lipgloss.NewStyle().
-			Background(colorHighlight).
-			Foreground(lipgloss.Color("0"))
-
-	findHitStyle = lipgloss.NewStyle().
-			Background(colorFindHit).
-			Foreground(lipgloss.Color("15"))
-
-	// Toolbar styles
-	toolbarStyle = lipgloss.NewStyle().
-			Foreground(colorToolbar).
-			Background(colorToolbarBg).
-			Bold(true).
-			Padding(0, 1)
-
-	// Status line style
-	statusStyle = lipgloss.NewStyle().
-			Foreground(colorStatus).
-			Italic(true)
-
-	// Prompt style
-	promptStyle = lipgloss.NewStyle().
-			Foreground(colorPrompt).
-			Bold(true)
-)
+// Styling constants and themes now come from m.theme
 
 // View renders the complete TUI interface
 func (m Model) View() string {
@@ -206,7 +130,7 @@ func (m Model) renderStatusLine() string {
 	statusLine = lipgloss.NewStyle().
 		Width(m.width).
 		Align(lipgloss.Left).
-		Render(statusStyle.Render(statusLine))
+		Render(m.theme.StatusStyle.Render(statusLine))
 
 	return statusLine
 }
@@ -228,8 +152,8 @@ func (m Model) renderToolbar() string {
 
 	// Combine both lines
 	toolbar := lipgloss.JoinVertical(lipgloss.Left,
-		toolbarStyle.Width(m.width).Render(hotkeyLine),
-		toolbarStyle.Width(m.width).Render(levelLine),
+		m.theme.ToolbarStyle.Width(m.width).Render(hotkeyLine),
+		m.theme.ToolbarStyle.Width(m.width).Render(levelLine),
 	)
 
 	return toolbar
@@ -306,7 +230,7 @@ func (m Model) renderPrompt() string {
 
 	prompt := lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		promptStyle.Render(promptLabel),
+		m.theme.PromptStyle.Render(promptLabel),
 		m.input.View(),
 	)
 
@@ -344,13 +268,13 @@ func (m Model) renderEventWithFullStyling(event core.LogEvent) string {
 	// 1. Timestamp prefix (optional, configurable)
 	if !event.Time.IsZero() {
 		timestamp := event.Time.Format("15:04:05.000")
-		parts = append(parts, timestampStyle.Render(timestamp))
+		parts = append(parts, m.theme.TimestampStyle.Render(timestamp))
 	}
 
 	// 2. Container name prefix (Docker mode only)
 	if m.mode == ModeDocker && event.Container != "" {
 		container := fmt.Sprintf("[%s]", event.Container)
-		parts = append(parts, containerStyle.Render(container))
+		parts = append(parts, m.theme.ContainerStyle.Render(container))
 	}
 
 	// 3. Severity badge
@@ -376,15 +300,15 @@ func (m Model) renderSeverityBadge(level core.Severity, levelStr string) string 
 
 	switch level {
 	case core.SevDebug:
-		style = debugBadgeStyle
+		style = m.theme.DebugBadgeStyle
 	case core.SevInfo:
-		style = infoBadgeStyle
+		style = m.theme.InfoBadgeStyle
 	case core.SevWarn:
-		style = warnBadgeStyle
+		style = m.theme.WarnBadgeStyle
 	case core.SevError:
-		style = errorBadgeStyle
+		style = m.theme.ErrorBadgeStyle
 	default:
-		style = otherBadgeStyle
+		style = m.theme.OtherBadgeStyle
 	}
 
 	// Normalize badge width for alignment
@@ -416,10 +340,10 @@ func (m Model) applyHighlighting(line string, seq uint64) string {
 	// Apply styling based on priority: find hit > find match > highlight
 	if isCurrentFindHit {
 		// Highlight the entire line for current find hit
-		return findHitStyle.Render(line)
+		return m.theme.FindHitStyle.Render(line)
 	} else if isFindMatch {
 		// Apply find match styling to matching portions
-		return m.applyInlineHighlight(line, findMatcher, findHitStyle)
+		return m.applyInlineHighlight(line, findMatcher, m.theme.FindHitStyle)
 	} else if shouldHighlight {
 		// Apply highlight styling to matching portions
 		return m.applyAllHighlights(line)
@@ -434,7 +358,7 @@ func (m Model) applyAllHighlights(line string) string {
 
 	// Apply each highlight pattern
 	for _, highlight := range m.filters.Highlights {
-		result = m.applyInlineHighlight(result, highlight, highlightStyle)
+		result = m.applyInlineHighlight(result, highlight, m.theme.HighlightStyle)
 	}
 
 	return result

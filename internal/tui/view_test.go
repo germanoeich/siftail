@@ -305,7 +305,7 @@ func TestRender_SubstringHighlight(t *testing.T) {
 
 	// Apply highlighting
 	testLine := "This is a test line"
-	result := model.applySubstringHighlight(testLine, matcher, highlightStyle)
+	result := model.applySubstringHighlight(testLine, matcher, model.theme.HighlightStyle)
 
 	// Result should not be empty
 	if result == "" {
