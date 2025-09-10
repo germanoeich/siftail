@@ -299,7 +299,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				level := int(msg.String()[0] - '0')
 				m.levels.Toggle(level)
 				m.dirty = true
-			// Severity focus with Shift+Number
+				// Severity focus with Shift+Number
 			case "!", "@", "#", "$", "%", "^", "&", "*", "(":
 				// Map shifted symbols to indices 1..9
 				sym := msg.String()
@@ -325,7 +325,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					idx = 9
 				}
 				if idx > 0 {
-					m.levels.Focus(idx)
+					// If this idx is already the only enabled level, enable all.
+					_, enabled := m.levels.GetSnapshot()
+					cnt := 0
+					for i := 1; i <= 9; i++ {
+						if enabled[i] {
+							cnt++
+						}
+					}
+					if cnt == 1 && enabled[idx] {
+						m.levels.EnableAll()
+					} else {
+						m.levels.Focus(idx)
+					}
 					m.dirty = true
 				}
 
