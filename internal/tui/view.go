@@ -159,8 +159,9 @@ func (m Model) renderToolbar() string {
 	renderHK := func(k hk) string {
 		// Only the key gets a background; the label stays plain/themed
 		key := m.theme.HotkeyPillStyle.Render(m.theme.HotkeyKeyStyle.Render(k.key))
-		label := m.theme.HotkeyLabelStyle.Render(" " + k.label)
-		return " " + key + label // leading space = left padding per shortcut
+		// One space between key and label; add a tiny trailing space for separation
+		label := m.theme.HotkeyLabelStyle.Render(" " + k.label + " ")
+		return key + label
 	}
 
 	var pills []string

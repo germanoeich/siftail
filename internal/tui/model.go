@@ -167,6 +167,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.updateFollowTail()
 
 	case tea.KeyMsg:
+		// Global pre-check: ensure '?' always opens help, regardless of layout quirks
+		if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == '?' {
+			m.helpOpen = true
+		}
 		if m.inPrompt {
 			// Handle prompt-specific keys
 			switch msg.String() {
