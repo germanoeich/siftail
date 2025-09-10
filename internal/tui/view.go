@@ -35,6 +35,16 @@ func (m Model) View() string {
 
 	baseView := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
+	// Help overlay (if open) — precedence after Docker overlays
+	if m.helpOpen {
+		overlay := m.renderHelpOverlay()
+		overlayStyle := lipgloss.NewStyle().
+			Align(lipgloss.Center, lipgloss.Center).
+			Width(m.width).
+			Height(m.height)
+		return overlayStyle.Render(overlay)
+	}
+
 	// Docker container list overlay (if open)
 	if m.dockerUI.ContainerListOpen {
 		overlay := m.renderDockerContainerList()
@@ -143,17 +153,17 @@ func (m Model) renderToolbar() string {
 	keys = append(keys,
 		hk{"^Q", "Quit"},
 		hk{"h", "Highlight"},
-		hk{"f", "Find"},
-		hk{"F", "FilterIn"},
-		hk{"U", "FilterOut"},
+		hk{"Ctrl+F", "Find"},
+		hk{"I", "FilterIn"},
+		hk{"O", "FilterOut"},
 		hk{"c", "Clear"},
 		hk{"C", "ClearAll"},
-		hk{"T", "Theme"},
-		hk{"Ctrl+S", "Select"},
+		hk{"t", "Theme"},
+		hk{"Mouse", "Drag-to-Copy"},
 		hk{"?", "Help"},
 	)
 	if m.mode == ModeDocker {
-		keys = append(keys, hk{"l", "Containers"}, hk{"P", "Presets"})
+		keys = append(keys, hk{"Ctrl+D", "Containers"}, hk{"p", "Presets"})
 	}
 
 	renderHK := func(k hk) string {
@@ -217,13 +227,13 @@ func (m Model) renderHelpOverlay() string {
 	lines = append(lines, "  Wheel      — scroll")
 	lines = append(lines, "")
 	lines = append(lines, "Find/Highlight:")
-	lines = append(lines, "  f          — Find; Up/Down jump matches")
+	lines = append(lines, "  Ctrl+F     — Find; Up/Down jump matches")
 	lines = append(lines, "  h          — Highlight (no jump)")
 	lines = append(lines, "  Esc        — Clear active Find")
 	lines = append(lines, "")
 	lines = append(lines, "Filters:")
-	lines = append(lines, "  F          — Filter In")
-	lines = append(lines, "  U          — Filter Out")
+	lines = append(lines, "  I          — Filter In")
+	lines = append(lines, "  O          — Filter Out")
 	lines = append(lines, "  c / C      — Clear filters (menu / all)")
 	lines = append(lines, "")
 	lines = append(lines, "Severity:")
@@ -232,13 +242,12 @@ func (m Model) renderHelpOverlay() string {
 	lines = append(lines, "  0          — Enable all")
 	lines = append(lines, "")
 	lines = append(lines, "Docker:")
-	lines = append(lines, "  l          — Containers list")
-	lines = append(lines, "  P          — Presets")
-	lines = append(lines, "  R          — Reconnect Docker")
+	lines = append(lines, "  Ctrl+D     — Containers list")
+	lines = append(lines, "  p          — Presets")
 	lines = append(lines, "")
 	lines = append(lines, "Misc:")
-	lines = append(lines, "  T          — Cycle theme")
-	lines = append(lines, "  Ctrl+S     — Selection mode (toggle)")
+	lines = append(lines, "  t          — Cycle theme")
+	lines = append(lines, "  Mouse drag — Select and copy")
 	lines = append(lines, "  ^Q         — Quit")
 
 	content := strings.Join(lines, "\n")
@@ -278,7 +287,7 @@ func (m Model) renderLevelMapping() string {
 			st = m.theme.OtherBadgeStyle
 		}
 
-		token := fmt.Sprintf("%d:%s", i, name)
+		token := fmt.Sprintf("%d: %s", i, name)
 		if !enabled[i] {
 			st = st.Strikethrough(true).Faint(true)
 		}

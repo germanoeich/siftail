@@ -20,6 +20,9 @@ type Theme struct {
 	HighlightStyle lipgloss.Style
 	FindHitStyle   lipgloss.Style
 
+	// Selection highlight (mouse drag)
+	SelectionStyle lipgloss.Style
+
 	// Chrome
 	ToolbarStyle     lipgloss.Style
 	HotkeyPillStyle  lipgloss.Style
@@ -43,6 +46,7 @@ func DarkTheme() *Theme {
 
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("220")).Foreground(lipgloss.Color("0")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("201")).Foreground(lipgloss.Color("15")).Bold(true),
+		SelectionStyle: lipgloss.NewStyle().Background(lipgloss.Color("24")).Foreground(lipgloss.Color("255")),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Bold(true),
 		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("15")).Padding(0, 0),
@@ -68,6 +72,7 @@ func DraculaTheme() *Theme {
 
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("228")).Foreground(lipgloss.Color("0")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("141")).Foreground(lipgloss.Color("231")).Bold(true),
+		SelectionStyle: lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("231")),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("235")).Bold(true),
 		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("250")).Foreground(lipgloss.Color("235")).Padding(0, 0),
@@ -93,6 +98,7 @@ func NordTheme() *Theme {
 
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("153")).Foreground(lipgloss.Color("234")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("39")).Foreground(lipgloss.Color("230")).Bold(true),
+		SelectionStyle: lipgloss.NewStyle().Background(lipgloss.Color("24")).Foreground(lipgloss.Color("230")),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Bold(true),
 		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("195")).Foreground(lipgloss.Color("0")).Padding(0, 0),
@@ -117,6 +123,7 @@ func LightTheme() *Theme {
 
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("227")).Foreground(lipgloss.Color("0")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("171")).Foreground(lipgloss.Color("0")).Bold(true),
+		SelectionStyle: lipgloss.NewStyle().Background(lipgloss.Color("111")).Foreground(lipgloss.Color("0")),
 
 		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true),
 		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("253")).Foreground(lipgloss.Color("0")).Padding(0, 0),

@@ -30,14 +30,16 @@
 
 ## 3) Hotkeys (default)
 
-* **Global:** `q` or `Ctrl+C` quit; `Esc` cancels current prompt.
+* **Global:** `Ctrl+Q` or `Ctrl+C` quit; `Esc` cancels current prompt.
+* **Help:** `?` or `F1` opens help; `Esc`/`?` closes.
 * **Highlight:** `h` → text box → **Enter** to add highlight (no scroll).
-* **Find:** `f` → text box → **Enter** to activate; **Up/Down** jumps prev/next hit.
-* **Filter-in:** `Shift+F` (capital F) → text box → **Enter** to apply.
-* **Filter-out:** `Shift+U` (capital U) → text box → **Enter** to apply.
-* **Severity:** `1..9` toggles corresponding severity buckets shown in the toolbar.
-* **Docker list:** `l` opens container list; inside list: `Space` toggle, `a` toggle All, `Enter`/`Esc` close.
-* **Docker presets:** `P` opens presets manager (apply, save current, delete).
+* **Find:** `Ctrl+F` → text box → **Enter** to activate; **Up/Down** jumps prev/next hit.
+* **Filter-in:** `I` (capital i) → text box → **Enter** to apply.
+* **Filter-out:** `O` (capital o) → text box → **Enter** to apply.
+* **Severity:** `1..9` toggles corresponding severity buckets shown in the toolbar; `Shift+1..9` focuses a single bucket; `0` enables all.
+* **Docker list:** `Ctrl+D` opens container list; inside list: `Space` toggle, `a` toggle All, `Enter`/`Esc` close.
+* **Docker presets:** `p` opens presets manager (apply, save current, delete).
+* **Theme:** `t` cycles theme.
 
 ## 4) CLI usage
 

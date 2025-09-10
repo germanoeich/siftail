@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -376,7 +377,7 @@ func TestErrors_ShownInStatus(t *testing.T) {
 	}
 }
 
-func TestDockerReconnect_FakeClient(t *testing.T) {
+func TestDockerErrorMessage_NoManualRetryHint(t *testing.T) {
 	// Setup
 	ring := core.NewRing(100)
 	filters := core.NewFilters()
@@ -385,19 +386,16 @@ func TestDockerReconnect_FakeClient(t *testing.T) {
 
 	model := *NewModel(ring, filters, search, levels, ModeDocker)
 
-	// Test Docker reconnect key 'R'
-	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}}
-	newModel, cmd := model.Update(keyMsg)
+	// Simulate a recoverable Docker error message emitted by the reader
+	errMsg := DockerErrorMsg{Error: fmt.Errorf("dial unix /var/run/docker.sock: connect: no such file"), Recoverable: true}
+	newModel, _ := model.Update(errMsg)
 	model = newModel.(Model)
 
-	// Check that reconnect message was set
-	if model.errMsg != "Attempting to reconnect to Docker..." {
-		t.Errorf("Expected reconnect message, got %s", model.errMsg)
+	if model.errMsg == "" {
+		t.Fatal("expected an error message to be set")
 	}
-
-	// Check that a command was returned (for reconnection)
-	if cmd == nil {
-		t.Error("Expected reconnect command to be returned")
+	if strings.Contains(model.errMsg, "Press 'R'") {
+		t.Fatalf("unexpected manual retry hint in error message: %q", model.errMsg)
 	}
 }
 

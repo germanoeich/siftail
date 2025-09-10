@@ -4,11 +4,18 @@ import (
 	"sort"
 	"time"
 
+	"regexp"
+	"strings"
+
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/germanoeich/siftail/internal/core"
 	"github.com/germanoeich/siftail/internal/persist"
+	"github.com/mattn/go-runewidth"
+	"github.com/muesli/termenv"
 )
 
 // Mode represents the operational mode of the application
@@ -90,12 +97,23 @@ type Model struct {
 	// Sequence -> current line index mapping
 	seqIndex map[uint64]int
 
+	// Cached content lines (styled and plain) currently set in the viewport
+	contentLines      []string // includes ANSI styling
+	contentPlainLines []string // ANSI stripped for selection/copy
+
 	// Theme
 	theme    *Theme
 	themeIdx int
 
 	// Selection-friendly mode (mouse disabled, alt screen off)
 	selectionMode bool
+
+	// Mouse selection state within the viewport
+	selecting bool
+	selStartX int // column within viewport
+	selStartY int // row within viewport
+	selEndX   int
+	selEndY   int
 
 	// Help overlay
 	helpOpen bool
@@ -160,6 +178,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.handleResize()
 
 	case tea.MouseMsg:
+		// Custom selection + copy handler (left drag, copy on release)
+		if !m.helpOpen && !m.dockerUI.ContainerListOpen && !m.dockerUI.PresetManagerOpen && !m.clearMenuOpen {
+			vpTopY := 1
+			vpBottomY := vpTopY + m.vp.Height - 1
+			if msg.Button == tea.MouseButtonLeft {
+				switch msg.Action {
+				case tea.MouseActionPress:
+					if msg.Y >= vpTopY && msg.Y <= vpBottomY {
+						m.selecting = true
+						m.selStartX = clamp(msg.X, 0, m.vp.Width-1)
+						m.selStartY = clamp(msg.Y-vpTopY, 0, m.vp.Height-1)
+						m.selEndX, m.selEndY = m.selStartX, m.selStartY
+						m.dirty = true
+					}
+				case tea.MouseActionMotion:
+					if m.selecting {
+						if msg.Y < vpTopY {
+							m.vp.ScrollUp(1)
+						} else if msg.Y > vpBottomY {
+							m.vp.ScrollDown(1)
+						}
+						m.selEndX = clamp(msg.X, 0, m.vp.Width-1)
+						m.selEndY = clamp(msg.Y-vpTopY, 0, m.vp.Height-1)
+						m.dirty = true
+					}
+				case tea.MouseActionRelease:
+					if m.selecting {
+						m.selEndX = clamp(msg.X, 0, m.vp.Width-1)
+						m.selEndY = clamp(msg.Y-vpTopY, 0, m.vp.Height-1)
+						if len(m.contentPlainLines) > 0 {
+							if text := m.extractSelectedText(); strings.TrimSpace(text) != "" {
+								// Copy via OSC52 (termenv) and native clipboard
+								cmds = append(cmds,
+									func() tea.Msg { termenv.Copy(text); return nil },
+									func() tea.Msg { _ = clipboard.WriteAll(text); return nil },
+								)
+								m = m.setError("Copied selection to clipboard")
+							}
+						}
+						m.selecting = false
+						m.dirty = true
+					}
+				}
+			}
+		}
+
 		// Forward mouse events (wheel scroll) to the viewport
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
@@ -167,10 +231,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.updateFollowTail()
 
 	case tea.KeyMsg:
-		// Global pre-check: ensure '?' always opens help, regardless of layout quirks
-		if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == '?' {
-			m.helpOpen = true
-		}
+		// Key handling branches below
 		if m.inPrompt {
 			// Handle prompt-specific keys
 			switch msg.String() {
@@ -187,9 +248,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.dockerUI.ContainerListOpen {
 			// Handle Docker container list navigation
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "ctrl+q", "ctrl+c":
 				return m, tea.Quit
-			case "esc", "enter":
+			case "esc", "enter", "q":
 				m.dockerUI.ContainerListOpen = false
 			case "up":
 				m = m.navigateContainerList(true) // up
@@ -203,9 +264,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.dockerUI.PresetManagerOpen {
 			// Handle Docker preset manager navigation
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "ctrl+q", "ctrl+c":
 				return m, tea.Quit
-			case "esc":
+			case "esc", "q":
 				m.dockerUI.PresetManagerOpen = false
 			case "up":
 				m = m.navigatePresetsList(true) // up
@@ -229,9 +290,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.clearMenuOpen {
 			// Clear menu navigation and actions
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "ctrl+q", "ctrl+c":
 				return m, tea.Quit
-			case "esc", "c":
+			case "esc", "c", "q":
 				m.clearMenuOpen = false
 			case "up":
 				if m.clearMenuSel > 0 {
@@ -266,17 +327,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Handle main app keys
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "ctrl+q", "ctrl+c":
 				return m, tea.Quit
 
 			// Search and filters
 			case "h":
 				m = m.startPrompt(PromptHighlight, "Highlight: ")
-			case "f":
+			case "ctrl+f":
 				m = m.startPrompt(PromptFind, "Find: ")
-			case "F":
+			case "I":
 				m = m.startPrompt(PromptFilterIn, "Filter In: ")
-			case "U":
+			case "O":
 				m = m.startPrompt(PromptFilterOut, "Filter Out: ")
 			case "0":
 				m.levels.EnableAll()
@@ -360,18 +421,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 			// Docker mode keys
-			case "l":
+			case "ctrl+d":
 				if m.mode == ModeDocker {
 					m.dockerUI.ContainerListOpen = !m.dockerUI.ContainerListOpen
 					m.dockerUI.SelectedContainer = -1 // Reset selection to "All"
 				}
-			case "P":
+			case "p":
 				if m.mode == ModeDocker {
 					m.dockerUI.PresetManagerOpen = true
 					m.dockerUI.SelectedPreset = 0
 					m = m.refreshPresetsList()
 				}
-			case "T":
+			case "t":
 				// Cycle theme
 				m.themeIdx = (m.themeIdx + 1) % len(themes)
 				m.theme = themes[m.themeIdx]
@@ -387,12 +448,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectionMode = true
 					m = m.setError("Selection mode: select text; press Ctrl+S to return")
 					cmds = append(cmds, tea.DisableMouse, tea.ExitAltScreen)
-				}
-			case "R":
-				if m.mode == ModeDocker {
-					// Attempt Docker reconnection
-					cmds = append(cmds, DockerReconnectCmd())
-					m = m.setError("Attempting to reconnect to Docker...")
 				}
 
 				// Viewport navigation
@@ -434,7 +489,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Success - clear error
 			m = m.setError("Docker reconnected successfully")
 		} else if msg.Recoverable {
-			m = m.setError("Docker unavailable: " + msg.Error.Error() + " (Press 'R' to retry)")
+			m = m.setError("Docker unavailable: " + msg.Error.Error())
 		} else {
 			m = m.setError("Docker error: " + msg.Error.Error())
 		}
@@ -658,7 +713,24 @@ func (m Model) updateViewportContent() Model {
 
 	// Render events to viewport content
 	content := m.renderEventsWithFullStyling(visibleEvents)
+	// Split into lines for possible selection overlay and caching
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+
+	// Apply selection overlay if actively selecting
+	if m.selecting {
+		lines = m.applySelectionHighlight(lines)
+	}
+
+	// Set viewport content from possibly highlighted lines
+	content = strings.Join(lines, "\n")
 	m.vp.SetContent(content)
+
+	// Cache content as lines (styled + plain) for selection/copy
+	m.contentLines = lines
+	m.contentPlainLines = make([]string, len(m.contentLines))
+	for i := range m.contentLines {
+		m.contentPlainLines[i] = stripANSI(m.contentLines[i])
+	}
 
 	// Auto-scroll if following tail
 	if m.followTail {
@@ -713,6 +785,169 @@ func RefreshCmd() tea.Cmd {
 	return func() tea.Msg {
 		return refreshMsg{}
 	}
+}
+
+// applySelectionHighlight overlays a visual highlight over the current
+// selection on top of styled content lines, preserving ANSI sequences.
+func (m Model) applySelectionHighlight(lines []string) []string {
+	if len(lines) == 0 || m.vp.Height <= 0 || m.vp.Width <= 0 {
+		return lines
+	}
+	// Normalize selection box
+	startY := minInt(m.selStartY, m.selEndY)
+	endY := maxInt(m.selStartY, m.selEndY)
+	startX := minInt(m.selStartX, m.selEndX)
+	endX := maxInt(m.selStartX, m.selEndX)
+	if startY == endY && startX == endX {
+		return lines
+	}
+	absStart := clamp(m.vp.YOffset+startY, 0, len(lines)-1)
+	absEnd := clamp(m.vp.YOffset+endY, 0, len(lines)-1)
+
+	out := make([]string, len(lines))
+	copy(out, lines)
+
+	for i := absStart; i <= absEnd; i++ {
+		line := lines[i]
+		// Determine selection columns for this line
+		sx := 0
+		ex := xansi.StringWidth(line)
+		if i == absStart {
+			sx = startX
+		}
+		if i == absEnd {
+			ex = endX
+		}
+		if ex < sx {
+			sx, ex = ex, sx
+		}
+		// Clamp to visible viewport width and line width
+		lw := xansi.StringWidth(line)
+		sx = clamp(sx, 0, minInt(m.vp.Width, lw))
+		ex = clamp(ex, 0, minInt(m.vp.Width, lw))
+		if sx == ex {
+			continue
+		}
+
+		left := xansi.Cut(line, 0, sx)
+		mid := xansi.Cut(line, sx, ex)
+		right := xansi.Cut(line, ex, lw)
+		// Use sticky inverse to ensure highlight survives inner SGR resets
+		out[i] = left + stickyInverse(mid) + right
+	}
+	return out
+}
+
+// extractSelectedText builds the selected plain text based on the selection
+// box (viewport coordinates) and current viewport offset.
+func (m Model) extractSelectedText() string {
+	if len(m.contentPlainLines) == 0 || m.vp.Height <= 0 || m.vp.Width <= 0 {
+		return ""
+	}
+	startY := minInt(m.selStartY, m.selEndY)
+	endY := maxInt(m.selStartY, m.selEndY)
+	startX := minInt(m.selStartX, m.selEndX)
+	endX := maxInt(m.selStartX, m.selEndX)
+	if startY == endY && startX == endX {
+		return ""
+	}
+	absStart := clamp(m.vp.YOffset+startY, 0, len(m.contentPlainLines)-1)
+	absEnd := clamp(m.vp.YOffset+endY, 0, len(m.contentPlainLines)-1)
+	var out []string
+	for i := absStart; i <= absEnd; i++ {
+		line := m.contentPlainLines[i]
+		sx := 0
+		ex := ansiStringWidth(line)
+		if i == absStart {
+			sx = startX
+		}
+		if i == absEnd {
+			ex = endX
+		}
+		if ex < sx {
+			sx, ex = ex, sx
+		}
+		sx = clamp(sx, 0, m.vp.Width)
+		ex = clamp(ex, 0, m.vp.Width)
+		if sx == ex {
+			if absStart != absEnd {
+				out = append(out, "")
+			}
+			continue
+		}
+		out = append(out, sliceByColumns(line, sx, ex))
+	}
+	return strings.Join(out, "\n")
+}
+
+// sliceByColumns slices s by screen columns [start, end) with rune width.
+func sliceByColumns(s string, start, end int) string {
+	if end <= start {
+		return ""
+	}
+	var b strings.Builder
+	col := 0
+	for _, r := range s {
+		w := runewidth.RuneWidth(r)
+		next := col + w
+		if next > start && col < end {
+			b.WriteRune(r)
+		}
+		if next >= end {
+			break
+		}
+		col = next
+	}
+	return b.String()
+}
+
+var ansiRegexp = regexp.MustCompile("\x1b\x5b[0-9;]*[ -/]*[@-~]")
+
+func stripANSI(s string) string    { return ansiRegexp.ReplaceAllString(s, "") }
+func ansiStringWidth(s string) int { return runewidth.StringWidth(s) }
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// clamp returns v clamped to [low, high].
+func clamp(v, low, high int) int {
+	if high < low {
+		low, high = high, low
+	}
+	if v < low {
+		return low
+	}
+	if v > high {
+		return high
+	}
+	return v
+}
+
+// stickyInverse wraps s with reverse-video SGR and re-applies it after any
+// inner SGR sequence so that the visual selection remains visible across
+// styled segments.
+const esc = "\x1b"
+
+var sgrSeq = regexp.MustCompile(esc + `\[[0-9;]*m`)
+
+func stickyInverse(s string) string {
+	const on = "\x1b[7m"   // reverse video on
+	const off = "\x1b[27m" // reverse video off
+	if s == "" {
+		return s
+	}
+	with := sgrSeq.ReplaceAllStringFunc(s, func(seq string) string { return seq + on })
+	return on + with + off
 }
 
 // navigateContainerList moves the selection cursor in the container list
