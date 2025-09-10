@@ -93,6 +93,9 @@ type Model struct {
 	// Theme
 	theme    *Theme
 	themeIdx int
+
+	// Selection-friendly mode (mouse disabled, alt screen off)
+	selectionMode bool
 }
 
 // NewModel creates a new TUI model with default configuration
@@ -358,6 +361,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.themeIdx = (m.themeIdx + 1) % len(themes)
 				m.theme = themes[m.themeIdx]
 				m.dirty = true
+			case "ctrl+s":
+				if m.selectionMode {
+					// Return to interactive mode: re-enter alt screen and re-enable mouse
+					m.selectionMode = false
+					m = m.setError("Selection mode off")
+					cmds = append(cmds, tea.EnterAltScreen, tea.EnableMouseCellMotion)
+				} else {
+					// Enable selection: disable mouse + exit alt screen
+					m.selectionMode = true
+					m = m.setError("Selection mode: select text; press Ctrl+S to return")
+					cmds = append(cmds, tea.DisableMouse, tea.ExitAltScreen)
+				}
 			case "R":
 				if m.mode == ModeDocker {
 					// Attempt Docker reconnection

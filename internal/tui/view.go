@@ -151,6 +151,7 @@ func (m Model) renderToolbar() string {
 		hk{"c", "Clear"},
 		hk{"C", "ClearAll"},
 		hk{"T", "Theme"},
+		hk{"Ctrl+S", "Select"},
 	)
 	if m.mode == ModeDocker {
 		keys = append(keys, hk{"l", "Containers"}, hk{"P", "Presets"})
