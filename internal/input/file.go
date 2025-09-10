@@ -295,34 +295,6 @@ func (f *FileReader) checkForTruncation() bool {
 	return false
 }
 
-// isNewFile checks if the file info represents a different file than before
-func (f *FileReader) isNewFile(newStat os.FileInfo) bool {
-	if f.lastStat == nil {
-		return true
-	}
-
-	// Compare size, modification time, and underlying system info
-	oldSys := f.lastStat.Sys()
-	newSys := newStat.Sys()
-
-	// Different modification time or size suggests it's different
-	if !f.lastStat.ModTime().Equal(newStat.ModTime()) || f.lastStat.Size() != newStat.Size() {
-		// If the new file is smaller or much newer, it's likely a new file
-		if newStat.Size() < f.lastStat.Size() ||
-			newStat.ModTime().Sub(f.lastStat.ModTime()) > time.Second {
-			return true
-		}
-	}
-
-	// On Unix systems, we can compare inodes
-	if oldSys != nil && newSys != nil {
-		// This is platform-specific, but works on Linux/macOS
-		// Would need build tags for proper cross-platform support
-		return fmt.Sprintf("%v", oldSys) != fmt.Sprintf("%v", newSys)
-	}
-
-	return false
-}
 
 // createLogEvent creates a LogEvent from a line of input
 func (f *FileReader) createLogEvent(line string) core.LogEvent {

@@ -31,62 +31,59 @@ var (
 	colorStatus    = lipgloss.Color("240") // Gray text
 	colorPrompt    = lipgloss.Color("12")  // Bright blue
 
-	// Base styles
-	baseStyle = lipgloss.NewStyle()
-
 	// Severity badge styles
-	debugBadgeStyle = baseStyle.Copy().
+	debugBadgeStyle = lipgloss.NewStyle().
 			Foreground(colorDebug).
 			Bold(false)
 
-	infoBadgeStyle = baseStyle.Copy().
+	infoBadgeStyle = lipgloss.NewStyle().
 			Foreground(colorInfo).
 			Bold(true)
 
-	warnBadgeStyle = baseStyle.Copy().
+	warnBadgeStyle = lipgloss.NewStyle().
 			Foreground(colorWarn).
 			Bold(true)
 
-	errorBadgeStyle = baseStyle.Copy().
+	errorBadgeStyle = lipgloss.NewStyle().
 			Foreground(colorError).
 			Bold(true)
 
-	otherBadgeStyle = baseStyle.Copy().
+	otherBadgeStyle = lipgloss.NewStyle().
 			Foreground(colorOther).
 			Bold(true)
 
 	// Container name style
-	containerStyle = baseStyle.Copy().
+	containerStyle = lipgloss.NewStyle().
 			Foreground(colorContainer).
 			Bold(true)
 
 	// Timestamp style
-	timestampStyle = baseStyle.Copy().
+	timestampStyle = lipgloss.NewStyle().
 			Foreground(colorTimestamp)
 
 	// Highlight styles
-	highlightStyle = baseStyle.Copy().
+	highlightStyle = lipgloss.NewStyle().
 			Background(colorHighlight).
 			Foreground(lipgloss.Color("0"))
 
-	findHitStyle = baseStyle.Copy().
+	findHitStyle = lipgloss.NewStyle().
 			Background(colorFindHit).
 			Foreground(lipgloss.Color("15"))
 
 	// Toolbar styles
-	toolbarStyle = baseStyle.Copy().
+	toolbarStyle = lipgloss.NewStyle().
 			Foreground(colorToolbar).
 			Background(colorToolbarBg).
 			Bold(true).
 			Padding(0, 1)
 
 	// Status line style
-	statusStyle = baseStyle.Copy().
+	statusStyle = lipgloss.NewStyle().
 			Foreground(colorStatus).
 			Italic(true)
 
 	// Prompt style
-	promptStyle = baseStyle.Copy().
+	promptStyle = lipgloss.NewStyle().
 			Foreground(colorPrompt).
 			Bold(true)
 )

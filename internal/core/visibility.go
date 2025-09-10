@@ -34,7 +34,7 @@ func ShouldShowEvent(event LogEvent, plan VisiblePlan) bool {
 	}
 	
 	// 2. Check Docker container visibility (only in docker mode)
-	if plan.DockerVisible != nil && len(plan.DockerVisible) > 0 {
+	if len(plan.DockerVisible) > 0 {
 		if event.Source == SourceDocker {
 			// Check visibility by container name first, then by ID
 			visible, hasName := plan.DockerVisible[event.Container]
@@ -76,7 +76,7 @@ func FilterEventsByLevel(events []LogEvent, levelMap *LevelMap) []LogEvent {
 
 // FilterEventsByContainer returns events from visible containers
 func FilterEventsByContainer(events []LogEvent, dockerVisible map[string]bool) []LogEvent {
-	if dockerVisible == nil || len(dockerVisible) == 0 {
+	if len(dockerVisible) == 0 {
 		return events
 	}
 	

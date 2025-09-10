@@ -182,7 +182,7 @@ func TestModel_FindNavigation(t *testing.T) {
 	search.SetActive(true)
 	
 	// Rebuild find index
-	model = model.refreshFindIndex()
+	model.refreshFindIndex()
 	
 	// Should have found matches
 	if search.Count() == 0 {
