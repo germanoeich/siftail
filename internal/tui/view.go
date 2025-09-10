@@ -142,10 +142,6 @@ func (m Model) renderToolbar() string {
 	var keys []hk
 	keys = append(keys,
 		hk{"^Q", "Quit"},
-		hk{"Home/End", "Scroll"},
-		hk{"PgUp/PgDn", "Scroll"},
-		hk{"Wheel", "Scroll"},
-		hk{"1..9", "Toggle"},
 		hk{"Shift+1..9", "Focus"},
 		hk{"0", "EnableAll"},
 		hk{"h", "Highlight"},
