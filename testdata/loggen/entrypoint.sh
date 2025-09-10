@@ -6,7 +6,7 @@ MODE="${MODE:-mixed}"
 SERVICE_NAME="${SERVICE_NAME:-app}"
 
 i=1
-while [ $i -le 10 ]; do
+while true; do
   # Rotate through common levels
   idx=$(( (i - 1) % 4 ))
   case "$idx" in
@@ -37,4 +37,3 @@ while [ $i -le 10 ]; do
   sleep 1
   i=$((i + 1))
 done
-

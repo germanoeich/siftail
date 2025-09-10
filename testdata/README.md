@@ -11,7 +11,7 @@ cd testdata
 docker compose up --build
 ```
 
-You’ll see output on the console and the containers will exit after ~10 seconds.
+You’ll see output on the console; containers continuously emit logs until stopped.
 
 While they run, you can use siftail in Docker mode:
 
@@ -28,7 +28,7 @@ Build the image and run one container emitting mixed logs:
 # Build image
 docker build -t siftail-loggen ./testdata/loggen
 
-# Run 10 lines, ~1s apart
+# Run continuously, ~1s per line
 docker run --rm \
   -e MODE=mixed \
   -e SERVICE_NAME=myapp \
@@ -44,4 +44,3 @@ docker run --rm \
 - `MODE=mixed` → alternates text/JSON every line.
 
 Each container produces 10 unique lines, one per second, then exits.
-
