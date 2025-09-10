@@ -229,17 +229,12 @@ func TestRender_LevelMapping(t *testing.T) {
 		t.Error("Expected level mapping to contain INFO")
 	}
 
-	// Should show enabled/disabled status
-	if !strings.Contains(levelMapping, "[on]") {
-		t.Error("Expected level mapping to show enabled status")
-	}
-
 	// Toggle a level and check
 	levels.Toggle(1) // Toggle DEBUG
 	levelMapping = model.renderLevelMapping()
-
-	if !strings.Contains(levelMapping, "[off]") {
-		t.Error("Expected level mapping to show disabled status after toggle")
+	// No legacy markers should be present
+	if strings.Contains(levelMapping, "[off]") || strings.Contains(levelMapping, "[on]") {
+		t.Error("Did not expect legacy [on]/[off] markers in level mapping")
 	}
 }
 

@@ -213,19 +213,32 @@ func (m Model) renderLevelMapping() string {
 	for i := 1; i <= 9; i++ {
 		name := indexToName[i]
 		if name == "" {
-			continue // Skip empty slots
+			continue
 		}
 
-		status := "off"
-		if enabled[i] {
-			status = "on"
+		// Choose a style per severity bucket
+		var st lipgloss.Style
+		switch i {
+		case 1:
+			st = m.theme.DebugBadgeStyle
+		case 2:
+			st = m.theme.InfoBadgeStyle
+		case 3:
+			st = m.theme.WarnBadgeStyle
+		case 4:
+			st = m.theme.ErrorBadgeStyle
+		default:
+			st = m.theme.OtherBadgeStyle
 		}
 
-		part := fmt.Sprintf("%d:%s[%s]", i, name, status)
-		parts = append(parts, part)
+		token := fmt.Sprintf("%d:%s", i, name)
+		if !enabled[i] {
+			st = st.Strikethrough(true).Faint(true)
+		}
+		parts = append(parts, st.Render(token))
 	}
 
-	return strings.Join(parts, " ")
+	return strings.Join(parts, "  ")
 }
 
 // renderPrompt shows the current text input prompt
