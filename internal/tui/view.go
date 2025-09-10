@@ -112,7 +112,31 @@ func (m Model) View() string {
 		sections = append(sections, m.renderToolbar())
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	baseView := lipgloss.JoinVertical(lipgloss.Left, sections...)
+
+	// Docker container list overlay (if open)
+	if m.dockerUI.ContainerListOpen {
+		overlay := m.renderDockerContainerList()
+		// Center the overlay on the screen
+		overlayStyle := lipgloss.NewStyle().
+			Align(lipgloss.Center, lipgloss.Center).
+			Width(m.width).
+			Height(m.height)
+		return overlayStyle.Render(overlay)
+	}
+
+	// Docker preset manager overlay (if open)
+	if m.dockerUI.PresetManagerOpen {
+		overlay := m.renderDockerPresetManager()
+		// Center the overlay on the screen
+		overlayStyle := lipgloss.NewStyle().
+			Align(lipgloss.Center, lipgloss.Center).
+			Width(m.width).
+			Height(m.height)
+		return overlayStyle.Render(overlay)
+	}
+
+	return baseView
 }
 
 // renderStatusLine shows current mode, filters, and stats
@@ -163,9 +187,10 @@ func (m Model) renderStatusLine() string {
 		parts = append(parts, fmt.Sprintf("Containers: %d/%d", visibleContainers, len(m.dockerUI.Containers)))
 	}
 
-	// Error message
+	// Error message with timestamp
 	if m.errMsg != "" {
-		parts = append(parts, fmt.Sprintf("ERROR: %s", m.errMsg))
+		timeStr := m.errTime.Format("15:04:05")
+		parts = append(parts, fmt.Sprintf("ERROR [%s]: %s", timeStr, m.errMsg))
 	}
 
 	statusLine := strings.Join(parts, " | ")
@@ -530,6 +555,62 @@ func (m Model) renderDockerContainerList() string {
 		BorderForeground(lipgloss.Color("36")).
 		Padding(1).
 		Width(min(60, m.width-4)).
+		Render(content)
+
+	return overlay
+}
+
+// renderDockerPresetManager renders the preset management overlay
+func (m Model) renderDockerPresetManager() string {
+	if !m.dockerUI.PresetManagerOpen {
+		return ""
+	}
+
+	var lines []string
+	lines = append(lines, "Preset Manager (Enter: apply, s: save current, d: delete, r: refresh, Esc: close)")
+	lines = append(lines, "")
+
+	if len(m.dockerUI.Presets) == 0 {
+		lines = append(lines, "No presets found.")
+		lines = append(lines, "Press 's' to save current container visibility as a preset.")
+	} else {
+		// List presets
+		for i, preset := range m.dockerUI.Presets {
+			line := fmt.Sprintf("  %s", preset.Name)
+			
+			// Show container count
+			visibleCount := 0
+			totalCount := len(preset.Visible)
+			for _, visible := range preset.Visible {
+				if visible {
+					visibleCount++
+				}
+			}
+			line += fmt.Sprintf(" (%d/%d visible)", visibleCount, totalCount)
+			
+			// Highlight selected preset
+			if i == m.dockerUI.SelectedPreset {
+				line = "> " + line[2:] // Replace indentation with selection indicator
+				line = lipgloss.NewStyle().
+					Background(lipgloss.Color("240")).
+					Foreground(lipgloss.Color("15")).
+					Render(line)
+			}
+			
+			lines = append(lines, line)
+		}
+		
+		lines = append(lines, "")
+		lines = append(lines, "Actions: Enter=Apply, s=Save Current, d=Delete Selected, r=Refresh")
+	}
+
+	// Create bordered overlay
+	content := strings.Join(lines, "\n")
+	overlay := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("33")). // Different color from container list
+		Padding(1).
+		Width(min(80, m.width-4)).
 		Render(content)
 
 	return overlay

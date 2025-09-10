@@ -2,6 +2,7 @@ package tui
 
 import (
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/germanoeich/siftail/internal/core"
@@ -246,5 +247,183 @@ func TestNewModel(t *testing.T) {
 		if model.inPrompt {
 			t.Error("Expected inPrompt to be initially false")
 		}
+	}
+}
+
+func TestDockerUI_ToggleSingle(t *testing.T) {
+	// Setup
+	ring := core.NewRing(100)
+	filters := core.NewFilters()
+	search := core.NewSearchState()
+	levels := core.NewLevelMap()
+	
+	model := *NewModel(ring, filters, search, levels, ModeDocker)
+	
+	// Setup containers
+	model.dockerUI.Containers = map[string]bool{
+		"nginx":    true,
+		"postgres": false,
+		"redis":    true,
+	}
+	
+	// Open container list
+	model.dockerUI.ContainerListOpen = true
+	model.dockerUI.SelectedContainer = 0 // Should be "nginx" when sorted
+	
+	// Test toggling selected container (nginx should become false)
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	newModel, _ := model.Update(keyMsg)
+	model = newModel.(Model)
+	
+	// nginx should now be false
+	if model.dockerUI.Containers["nginx"] != false {
+		t.Errorf("Expected nginx to be false after toggle, got %v", model.dockerUI.Containers["nginx"])
+	}
+	
+	// Other containers should remain unchanged
+	if model.dockerUI.Containers["postgres"] != false {
+		t.Errorf("Expected postgres to remain false, got %v", model.dockerUI.Containers["postgres"])
+	}
+	
+	if model.dockerUI.Containers["redis"] != true {
+		t.Errorf("Expected redis to remain true, got %v", model.dockerUI.Containers["redis"])
+	}
+}
+
+func TestDockerUI_ToggleAll(t *testing.T) {
+	// Setup
+	ring := core.NewRing(100)
+	filters := core.NewFilters()
+	search := core.NewSearchState()
+	levels := core.NewLevelMap()
+	
+	model := *NewModel(ring, filters, search, levels, ModeDocker)
+	
+	// Setup containers with mixed visibility
+	model.dockerUI.Containers = map[string]bool{
+		"nginx":    true,
+		"postgres": false,
+		"redis":    true,
+	}
+	
+	// Open container list and select "All" (index -1)
+	model.dockerUI.ContainerListOpen = true
+	model.dockerUI.SelectedContainer = -1 // "All" option
+	model.dockerUI.AllToggle = true
+	
+	// Test toggling all containers (should make all false)
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	newModel, _ := model.Update(keyMsg)
+	model = newModel.(Model)
+	
+	// All containers should now be false
+	for name, visible := range model.dockerUI.Containers {
+		if visible != false {
+			t.Errorf("Expected container %s to be false after toggle all, got %v", name, visible)
+		}
+	}
+	
+	// AllToggle should now be false
+	if model.dockerUI.AllToggle != false {
+		t.Errorf("Expected AllToggle to be false, got %v", model.dockerUI.AllToggle)
+	}
+	
+	// Test toggling all again (should make all true)
+	keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	newModel, _ = model.Update(keyMsg)
+	model = newModel.(Model)
+	
+	// All containers should now be true
+	for name, visible := range model.dockerUI.Containers {
+		if visible != true {
+			t.Errorf("Expected container %s to be true after second toggle all, got %v", name, visible)
+		}
+	}
+	
+	// AllToggle should now be true
+	if model.dockerUI.AllToggle != true {
+		t.Errorf("Expected AllToggle to be true, got %v", model.dockerUI.AllToggle)
+	}
+}
+
+func TestErrors_ShownInStatus(t *testing.T) {
+	// Setup
+	ring := core.NewRing(100)
+	filters := core.NewFilters()
+	search := core.NewSearchState()
+	levels := core.NewLevelMap()
+	
+	model := *NewModel(ring, filters, search, levels, ModeFile)
+	
+	// Set an error
+	model = model.setError("Test error message")
+	
+	// Check that error is set
+	if model.errMsg != "Test error message" {
+		t.Errorf("Expected error message to be set, got %s", model.errMsg)
+	}
+	
+	// Check that error time is set
+	if model.errTime.IsZero() {
+		t.Error("Expected error time to be set")
+	}
+	
+	// Check that error eventually expires
+	model.errTime = model.errTime.Add(-6 * time.Second) // Make it 6 seconds old
+	if !model.isErrorExpired() {
+		t.Error("Expected error to be expired after 6 seconds")
+	}
+}
+
+func TestDockerReconnect_FakeClient(t *testing.T) {
+	// Setup
+	ring := core.NewRing(100)
+	filters := core.NewFilters()
+	search := core.NewSearchState()
+	levels := core.NewLevelMap()
+	
+	model := *NewModel(ring, filters, search, levels, ModeDocker)
+	
+	// Test Docker reconnect key 'R'
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'R'}}
+	newModel, cmd := model.Update(keyMsg)
+	model = newModel.(Model)
+	
+	// Check that reconnect message was set
+	if model.errMsg != "Attempting to reconnect to Docker..." {
+		t.Errorf("Expected reconnect message, got %s", model.errMsg)
+	}
+	
+	// Check that a command was returned (for reconnection)
+	if cmd == nil {
+		t.Error("Expected reconnect command to be returned")
+	}
+}
+
+func TestLineLength_Truncation(t *testing.T) {
+	// Setup
+	ring := core.NewRing(100)
+	filters := core.NewFilters()
+	search := core.NewSearchState()
+	levels := core.NewLevelMap()
+	
+	model := *NewModel(ring, filters, search, levels, ModeFile)
+	model.perf.MaxLineLength = 10 // Very short for testing
+	
+	// Test truncating a long line
+	longLine := "This is a very long line that should be truncated"
+	truncated := model.truncateLine(longLine)
+	
+	// Should be truncated to 10 chars with "..."
+	expected := "This is..."
+	if truncated != expected {
+		t.Errorf("Expected truncated line %q, got %q", expected, truncated)
+	}
+	
+	// Test a short line (should not be truncated)
+	shortLine := "Short"
+	notTruncated := model.truncateLine(shortLine)
+	if notTruncated != shortLine {
+		t.Errorf("Expected short line to remain unchanged, got %q", notTruncated)
 	}
 }

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"sort"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -8,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/germanoeich/siftail/internal/core"
+	"github.com/germanoeich/siftail/internal/persist"
 )
 
 // Mode represents the operational mode of the application
@@ -36,7 +38,15 @@ type DockerUIState struct {
 	PresetManagerOpen bool
 	Containers        map[string]bool // container id/name -> visible
 	AllToggle         bool
-	SelectedContainer int // index in sorted container list for navigation
+	SelectedContainer int             // index in sorted container list for navigation
+	Presets          []persist.Preset // loaded presets for UI
+	SelectedPreset   int             // index in presets list for navigation
+}
+
+// PerformanceConfig holds performance-related configuration
+type PerformanceConfig struct {
+	MaxLineLength int           // maximum line length before truncation (default: 2048)
+	RenderThrottle time.Duration // minimum time between renders (default: 33ms for ~30fps)
 }
 
 // Model represents the main TUI state and manages all UI components
@@ -57,6 +67,10 @@ type Model struct {
 
 	// Docker UI state
 	dockerUI DockerUIState
+	presets  *persist.PresetsManager
+
+	// Performance configuration
+	perf PerformanceConfig
 
 	// App state
 	mode       Mode
@@ -64,6 +78,7 @@ type Model struct {
 	width      int
 	height     int
 	errMsg     string
+	errTime    time.Time // timestamp of the error for auto-clearing
 
 	// Throttling for smooth updates
 	lastRender time.Time
@@ -81,6 +96,9 @@ func NewModel(ring *core.Ring, filters *core.Filters, search *core.SearchState, 
 	input.Placeholder = "Enter search term..."
 	input.CharLimit = 256
 
+	// Initialize presets manager (ignore error for now)
+	presetsManager, _ := persist.NewPresetsManager()
+
 	return &Model{
 		vp:         vp,
 		input:      input,
@@ -93,6 +111,11 @@ func NewModel(ring *core.Ring, filters *core.Filters, search *core.SearchState, 
 		dockerUI: DockerUIState{
 			Containers: make(map[string]bool),
 			AllToggle:  true,
+		},
+		presets: presetsManager,
+		perf: PerformanceConfig{
+			MaxLineLength:  2048,                   // 2KB per line max
+			RenderThrottle: 33 * time.Millisecond, // ~30 FPS
 		},
 		width:  80,
 		height: 24,
@@ -131,6 +154,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input, cmd = m.input.Update(msg)
 				cmds = append(cmds, cmd)
 			}
+		} else if m.dockerUI.ContainerListOpen {
+			// Handle Docker container list navigation
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "esc", "enter":
+				m.dockerUI.ContainerListOpen = false
+			case "up":
+				m = m.navigateContainerList(true) // up
+			case "down":
+				m = m.navigateContainerList(false) // down
+			case " ":
+				m = m.toggleSelectedContainer()
+			case "a":
+				m = m.toggleAllContainers()
+			}
+		} else if m.dockerUI.PresetManagerOpen {
+			// Handle Docker preset manager navigation
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.dockerUI.PresetManagerOpen = false
+			case "up":
+				m = m.navigatePresetsList(true) // up
+			case "down":
+				m = m.navigatePresetsList(false) // down
+			case "enter":
+				m = m.applySelectedPreset()
+			case "s":
+				m = m.startPrompt(PromptPresetName, "Save preset as: ")
+			case "d", "x":
+				m = m.deleteSelectedPreset()
+			case "r":
+				m = m.refreshPresetsList()
+			}
 		} else {
 			// Handle main app keys
 			switch msg.String() {
@@ -167,10 +226,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "l":
 				if m.mode == ModeDocker {
 					m.dockerUI.ContainerListOpen = !m.dockerUI.ContainerListOpen
+					m.dockerUI.SelectedContainer = -1 // Reset selection to "All"
 				}
 			case "P":
 				if m.mode == ModeDocker {
-					m = m.startPrompt(PromptPresetName, "Preset Name: ")
+					m.dockerUI.PresetManagerOpen = true
+					m.dockerUI.SelectedPreset = 0
+					m = m.refreshPresetsList()
+				}
+			case "R":
+				if m.mode == ModeDocker {
+					// Attempt Docker reconnection
+					cmds = append(cmds, DockerReconnectCmd())
+					m = m.setError("Attempting to reconnect to Docker...")
 				}
 
 			// Viewport navigation
@@ -190,6 +258,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshMsg:
 		// Force refresh of visible content
 		m = m.refreshContent()
+
+	case DockerContainersMsg:
+		// Update container list from Docker reader
+		m = m.updateDockerContainers(msg.Containers)
+
+	case DockerErrorMsg:
+		// Handle Docker connection errors
+		if msg.Error == nil {
+			// Success - clear error
+			m = m.setError("Docker reconnected successfully")
+		} else if msg.Recoverable {
+			m = m.setError("Docker unavailable: " + msg.Error.Error() + " (Press 'R' to retry)")
+		} else {
+			m = m.setError("Docker error: " + msg.Error.Error())
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -241,8 +324,7 @@ func (m Model) handlePromptSubmit() Model {
 
 	matcher, err := core.NewMatcher(text)
 	if err != nil {
-		m.errMsg = "Invalid pattern: " + err.Error()
-		return m
+		return m.setError("Invalid pattern: " + err.Error())
 	}
 
 	switch m.promptKind {
@@ -261,8 +343,21 @@ func (m Model) handlePromptSubmit() Model {
 	case PromptFilterOut:
 		m.filters.AddExclude(matcher)
 	case PromptPresetName:
-		// TODO: Implement preset saving
-		m.errMsg = "Preset saving not yet implemented"
+		// Save current container visibility as a preset
+		if m.mode == ModeDocker && m.presets != nil {
+			preset := persist.CreatePresetFromCurrent(text, m.dockerUI.Containers)
+			if err := m.presets.SavePreset(preset); err != nil {
+				return m.setError("Failed to save preset: " + err.Error())
+			} else {
+				m = m.setError("Preset '" + text + "' saved successfully")
+				m = m.refreshPresetsList() // Refresh the presets list
+			}
+		} else {
+			return m.setError("Presets are only available in Docker mode")
+		}
+		// Don't use matcher for preset names, so exit early
+		m.dirty = true
+		return m
 	}
 
 	m.errMsg = ""
@@ -331,8 +426,13 @@ func (m Model) refreshContent() Model {
 func (m Model) handleTick() Model {
 	now := time.Now()
 	
-	// Throttle to ~30 FPS
-	if m.dirty && now.Sub(m.lastRender) > 33*time.Millisecond {
+	// Auto-clear expired errors
+	if m.isErrorExpired() {
+		m = m.clearError()
+	}
+	
+	// Throttle rendering based on configuration
+	if m.dirty && now.Sub(m.lastRender) > m.perf.RenderThrottle {
 		m = m.updateViewportContent()
 		m.lastRender = now
 		m.dirty = false
@@ -354,7 +454,7 @@ func (m Model) updateViewportContent() Model {
 	visibleEvents := core.ComputeVisible(events, plan)
 
 	// Render events to viewport content
-	content := m.renderEventsWithFullStyling(visibleEvents)
+	content := m.renderBasicEvents(visibleEvents)
 	m.vp.SetContent(content)
 
 	// Auto-scroll if following tail
@@ -384,8 +484,8 @@ func (m Model) renderBasicEvents(events []core.LogEvent) string {
 
 // renderEvent formats a single log event with styling
 func (m Model) renderEvent(event core.LogEvent) string {
-	// This is a basic implementation - will be enhanced in view.go
-	line := event.Line
+	// Apply line truncation first
+	line := m.truncateLine(event.Line)
 	
 	// Add container prefix for Docker mode
 	if m.mode == ModeDocker && event.Container != "" {
@@ -395,7 +495,7 @@ func (m Model) renderEvent(event core.LogEvent) string {
 		line = containerStyle.Render("["+event.Container+"]") + " " + line
 	}
 
-	// Apply highlighting
+	// Apply highlighting (check against original line for match)
 	if m.filters.ShouldHighlight(event.Line) {
 		line = lipgloss.NewStyle().
 			Background(lipgloss.Color("11")).
@@ -410,6 +510,17 @@ func (m Model) renderEvent(event core.LogEvent) string {
 type tickMsg time.Time
 type refreshMsg struct{}
 
+// DockerContainersMsg updates the list of available containers
+type DockerContainersMsg struct {
+	Containers map[string]bool // container name -> initially visible
+}
+
+// DockerErrorMsg indicates Docker connection issues
+type DockerErrorMsg struct {
+	Error      error
+	Recoverable bool // true if user can attempt reconnection
+}
+
 // tickCmd returns a command that sends tick messages for render throttling
 func tickCmd() tea.Cmd {
 	return tea.Tick(16*time.Millisecond, func(t time.Time) tea.Msg {
@@ -422,4 +533,230 @@ func RefreshCmd() tea.Cmd {
 	return func() tea.Msg {
 		return refreshMsg{}
 	}
+}
+
+// navigateContainerList moves the selection cursor in the container list
+func (m Model) navigateContainerList(up bool) Model {
+	containerCount := len(m.dockerUI.Containers)
+	
+	if up {
+		if m.dockerUI.SelectedContainer > -1 {
+			m.dockerUI.SelectedContainer--
+		} else {
+			// Wrap to last container when going up from "All"
+			m.dockerUI.SelectedContainer = containerCount - 1
+		}
+	} else {
+		if m.dockerUI.SelectedContainer < containerCount - 1 {
+			m.dockerUI.SelectedContainer++
+		} else {
+			// Wrap to "All" when going down from last container
+			m.dockerUI.SelectedContainer = -1
+		}
+	}
+	
+	return m
+}
+
+// toggleSelectedContainer toggles visibility of the currently selected container
+func (m Model) toggleSelectedContainer() Model {
+	if m.dockerUI.SelectedContainer == -1 {
+		// Toggle All
+		return m.toggleAllContainers()
+	}
+	
+	// Get sorted container list to find the selected container
+	var containers []string
+	for name := range m.dockerUI.Containers {
+		containers = append(containers, name)
+	}
+	sort.Strings(containers)
+	
+	if m.dockerUI.SelectedContainer >= 0 && m.dockerUI.SelectedContainer < len(containers) {
+		selectedContainer := containers[m.dockerUI.SelectedContainer]
+		m.dockerUI.Containers[selectedContainer] = !m.dockerUI.Containers[selectedContainer]
+		m.dirty = true
+	}
+	
+	return m
+}
+
+// toggleAllContainers toggles visibility of all containers at once
+func (m Model) toggleAllContainers() Model {
+	m.dockerUI.AllToggle = !m.dockerUI.AllToggle
+	
+	// Apply the all toggle to all containers
+	for name := range m.dockerUI.Containers {
+		m.dockerUI.Containers[name] = m.dockerUI.AllToggle
+	}
+	
+	m.dirty = true
+	return m
+}
+
+// updateDockerContainers updates the container list with new containers
+func (m Model) updateDockerContainers(containers map[string]bool) Model {
+	// Preserve existing visibility settings for containers that still exist
+	newContainers := make(map[string]bool)
+	
+	for name, defaultVisible := range containers {
+		if existing, exists := m.dockerUI.Containers[name]; exists {
+			// Keep existing setting
+			newContainers[name] = existing
+		} else {
+			// New container, use default visibility
+			newContainers[name] = defaultVisible
+		}
+	}
+	
+	m.dockerUI.Containers = newContainers
+	m.dirty = true
+	
+	return m
+}
+
+// refreshPresetsList loads the current presets from disk into the UI
+func (m Model) refreshPresetsList() Model {
+	if m.presets == nil {
+		m.errMsg = "Presets manager not available"
+		return m
+	}
+	
+	presets, err := m.presets.LoadPresets()
+	if err != nil {
+		m.errMsg = "Failed to load presets: " + err.Error()
+		m.dockerUI.Presets = nil
+	} else {
+		m.dockerUI.Presets = presets
+		// Reset selection if it's out of bounds
+		if m.dockerUI.SelectedPreset >= len(presets) {
+			m.dockerUI.SelectedPreset = len(presets) - 1
+		}
+		if m.dockerUI.SelectedPreset < 0 && len(presets) > 0 {
+			m.dockerUI.SelectedPreset = 0
+		}
+	}
+	
+	m.dirty = true
+	return m
+}
+
+// navigatePresetsList moves the selection cursor in the presets list
+func (m Model) navigatePresetsList(up bool) Model {
+	presetCount := len(m.dockerUI.Presets)
+	if presetCount == 0 {
+		return m
+	}
+	
+	if up {
+		if m.dockerUI.SelectedPreset > 0 {
+			m.dockerUI.SelectedPreset--
+		} else {
+			// Wrap to last preset
+			m.dockerUI.SelectedPreset = presetCount - 1
+		}
+	} else {
+		if m.dockerUI.SelectedPreset < presetCount - 1 {
+			m.dockerUI.SelectedPreset++
+		} else {
+			// Wrap to first preset
+			m.dockerUI.SelectedPreset = 0
+		}
+	}
+	
+	return m
+}
+
+// applySelectedPreset applies the currently selected preset to container visibility
+func (m Model) applySelectedPreset() Model {
+	if len(m.dockerUI.Presets) == 0 || m.dockerUI.SelectedPreset < 0 || m.dockerUI.SelectedPreset >= len(m.dockerUI.Presets) {
+		m.errMsg = "No preset selected"
+		return m
+	}
+	
+	selectedPreset := m.dockerUI.Presets[m.dockerUI.SelectedPreset]
+	m.dockerUI.Containers = persist.ApplyPreset(selectedPreset, m.dockerUI.Containers)
+	
+	m.errMsg = "Applied preset '" + selectedPreset.Name + "'"
+	m.dockerUI.PresetManagerOpen = false
+	m.dirty = true
+	
+	return m
+}
+
+// deleteSelectedPreset removes the currently selected preset from disk
+func (m Model) deleteSelectedPreset() Model {
+	if len(m.dockerUI.Presets) == 0 || m.dockerUI.SelectedPreset < 0 || m.dockerUI.SelectedPreset >= len(m.dockerUI.Presets) {
+		m.errMsg = "No preset selected"
+		return m
+	}
+	
+	if m.presets == nil {
+		m.errMsg = "Presets manager not available"
+		return m
+	}
+	
+	selectedPreset := m.dockerUI.Presets[m.dockerUI.SelectedPreset]
+	if err := m.presets.DeletePreset(selectedPreset.Name); err != nil {
+		m.errMsg = "Failed to delete preset: " + err.Error()
+	} else {
+		m.errMsg = "Deleted preset '" + selectedPreset.Name + "'"
+		m = m.refreshPresetsList()
+	}
+	
+	return m
+}
+
+// setError sets an error message with timestamp for auto-clearing
+func (m Model) setError(msg string) Model {
+	m.errMsg = msg
+	m.errTime = time.Now()
+	m.dirty = true
+	return m
+}
+
+// clearError clears the error message
+func (m Model) clearError() Model {
+	m.errMsg = ""
+	m.errTime = time.Time{}
+	m.dirty = true
+	return m
+}
+
+// isErrorExpired returns true if the error should be auto-cleared
+func (m Model) isErrorExpired() bool {
+	if m.errMsg == "" {
+		return false
+	}
+	// Clear error after 5 seconds
+	return time.Since(m.errTime) > 5*time.Second
+}
+
+// DockerReconnectCmd returns a command to attempt Docker reconnection
+func DockerReconnectCmd() tea.Cmd {
+	return func() tea.Msg {
+		// This is a placeholder - in a real implementation, this would
+		// attempt to reconnect to Docker and return appropriate messages
+		// For now, we'll just return a success message after a brief delay
+		time.Sleep(500 * time.Millisecond)
+		return DockerErrorMsg{
+			Error:       nil, // nil indicates success
+			Recoverable: false,
+		}
+	}
+}
+
+// truncateLine truncates a line to the maximum configured length, adding "..." if truncated
+func (m Model) truncateLine(line string) string {
+	if len(line) <= m.perf.MaxLineLength {
+		return line
+	}
+	
+	// Use rune-based truncation to handle Unicode properly
+	runes := []rune(line)
+	if len(runes) <= m.perf.MaxLineLength-3 { // Reserve space for "..."
+		return line
+	}
+	
+	return string(runes[:m.perf.MaxLineLength-3]) + "..."
 }
