@@ -205,7 +205,7 @@ func (m Model) renderStatusLine() string {
 func (m Model) renderToolbar() string {
 	// First line: main hotkeys
 	var hotkeys []string
-	hotkeys = append(hotkeys, "^Q Quit", "^C Cancel", "h Highlight", "f Find", "F Filter", "U FilterOut")
+	hotkeys = append(hotkeys, "^Q Quit", "^C Cancel", "PgUp/PgDn Scroll", "Wheel Scroll", "h Highlight", "f Find", "F Filter", "U FilterOut")
 
 	if m.mode == ModeDocker {
 		hotkeys = append(hotkeys, "l Containers", "P Presets")

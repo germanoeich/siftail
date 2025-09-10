@@ -127,8 +127,11 @@ func TestParseArgs_ValidFlags(t *testing.T) {
 			t.Errorf("Test case %d: expected buffer size %d, got %d", i, tc.expected.BufferSize, config.BufferSize)
 		}
 
-		if config.FromStart != tc.expected.FromStart {
-			t.Errorf("Test case %d: expected from-start %t, got %t", i, tc.expected.FromStart, config.FromStart)
+		// Only meaningful for file mode
+		if tc.expected.Mode == tui.ModeFile {
+			if config.FromStart != tc.expected.FromStart {
+				t.Errorf("Test case %d: expected from-start %t, got %t", i, tc.expected.FromStart, config.FromStart)
+			}
 		}
 
 		if config.NoColor != tc.expected.NoColor {
@@ -303,8 +306,8 @@ func TestDefaultConfig(t *testing.T) {
 		t.Error("Expected default no-color to be false")
 	}
 
-	if config.FromStart {
-		t.Error("Expected default from-start to be false")
+	if !config.FromStart {
+		t.Error("Expected default from-start to be true")
 	}
 }
 

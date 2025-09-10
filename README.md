@@ -13,7 +13,8 @@ siftail /var/log/app.log
 ```
 
 Notes:
-- By default, siftail tails from the end and prefills the view with up to the last 200 lines (reading at most ~512KB). Use `--from-start` to load the entire existing file before tailing.
+- By default, siftail reads the entire file from the beginning, then continues tailing.
+- To show only the last N lines initially and tail from the end, use `-n N` (or `--num-lines N`).
 
 ### Docker Mode  
 Stream logs from all running containers:

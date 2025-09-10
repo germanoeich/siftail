@@ -140,6 +140,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m = m.handleResize()
 
+	case tea.MouseMsg:
+		// Forward mouse events (wheel scroll) to the viewport
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		cmds = append(cmds, cmd)
+		m = m.updateFollowTail()
+
 	case tea.KeyMsg:
 		if m.inPrompt {
 			// Handle prompt-specific keys

@@ -25,6 +25,7 @@ type Config struct {
 	FilePath    string
 	BufferSize  int
 	FromStart   bool
+	NumLines    int // file mode prefill; if <0, read whole file
 	NoColor     bool
 	TimeFormat  string
 	ShowHelp    bool
@@ -37,7 +38,8 @@ func DefaultConfig() Config {
 		BufferSize: 10000,
 		TimeFormat: "15:04:05.000",
 		NoColor:    false,
-		FromStart:  false,
+		FromStart:  true, // default to read entire file
+		NumLines:   -1,   // unset
 	}
 }
 
@@ -53,7 +55,9 @@ func ParseArgs(args []string) (Config, error) {
 
 	// Define flags
 	fs.IntVar(&config.BufferSize, "buffer-size", config.BufferSize, "ring buffer size for log events")
-	fs.BoolVar(&config.FromStart, "from-start", config.FromStart, "start reading from beginning of file (file mode only)")
+	fs.BoolVar(&config.FromStart, "from-start", config.FromStart, "start reading from beginning of file (file mode only; default true)")
+	fs.IntVar(&config.NumLines, "n", config.NumLines, "prefill last N lines (file mode only; overrides --from-start)")
+	fs.IntVar(&config.NumLines, "num-lines", config.NumLines, "prefill last N lines (file mode only; overrides --from-start)")
 	fs.BoolVar(&config.NoColor, "no-color", config.NoColor, "disable colored output")
 	fs.StringVar(&config.TimeFormat, "time-format", config.TimeFormat, "timestamp format for display")
 	fs.BoolVar(&config.ShowHelp, "h", config.ShowHelp, "show help message")
@@ -169,7 +173,7 @@ func Run(config Config) error {
 	model := tui.NewModel(ring, filters, search, levels, config.Mode)
 
 	// Bubble Tea program (created before starting readers so we can send refresh msgs)
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Wire input -> ring and notify UI
 	ctx, cancel := context.WithCancel(context.Background())
@@ -178,7 +182,7 @@ func Run(config Config) error {
 	// Initialize data source based on mode
 	switch config.Mode {
 	case tui.ModeFile:
-		if err := startFileReader(ctx, config.FilePath, config.FromStart, ring, program); err != nil {
+		if err := startFileReader(ctx, config.FilePath, config.FromStart, config.NumLines, ring, program); err != nil {
 			return fmt.Errorf("failed to start file reader: %w", err)
 		}
 
@@ -245,10 +249,11 @@ func wireEventStream(ctx context.Context, events <-chan core.LogEvent, errs <-ch
 }
 
 // startFileReader initializes file tailing for the given path
-func startFileReader(ctx context.Context, filePath string, fromStart bool, ring *core.Ring, ui uiRefresher) error {
-	// Optional prefill: when not starting from beginning, show recent tail so users see content immediately
-	if !fromStart {
-		_ = prefillLastLines(filePath, 200, 512*1024, ring, ui)
+func startFileReader(ctx context.Context, filePath string, fromStart bool, numLines int, ring *core.Ring, ui uiRefresher) error {
+	// If numLines specified, prefill last N lines and then tail from end
+	if numLines >= 0 {
+		_ = prefillLastLines(filePath, numLines, 16*1024*1024, ring, ui)
+		fromStart = false
 	}
 
 	reader := input.NewFileReader(filePath, fromStart)
@@ -404,7 +409,8 @@ FLAGS:
   -h, --help                   show this help message
   -v, --version                show version information
   --buffer-size N              ring buffer size (default: 10000)
-  --from-start                 start reading from beginning of file (file mode)
+  --from-start                 start reading from beginning of file (file mode; default)
+  -n, --num-lines N            prefill last N lines (file mode; overrides --from-start)
   --no-color                   disable colored output
   --time-format FORMAT         timestamp format (default: "15:04:05.000")
 
