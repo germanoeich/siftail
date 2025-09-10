@@ -142,8 +142,6 @@ func (m Model) renderToolbar() string {
 	var keys []hk
 	keys = append(keys,
 		hk{"^Q", "Quit"},
-		hk{"Shift+1..9", "Focus"},
-		hk{"0", "EnableAll"},
 		hk{"h", "Highlight"},
 		hk{"f", "Find"},
 		hk{"F", "FilterIn"},
@@ -152,6 +150,7 @@ func (m Model) renderToolbar() string {
 		hk{"C", "ClearAll"},
 		hk{"T", "Theme"},
 		hk{"Ctrl+S", "Select"},
+		hk{"?", "Help"},
 	)
 	if m.mode == ModeDocker {
 		keys = append(keys, hk{"l", "Containers"}, hk{"P", "Presets"})
@@ -161,7 +160,7 @@ func (m Model) renderToolbar() string {
 		// Only the key gets a background; the label stays plain/themed
 		key := m.theme.HotkeyPillStyle.Render(m.theme.HotkeyKeyStyle.Render(k.key))
 		label := m.theme.HotkeyLabelStyle.Render(" " + k.label)
-		return key + label
+		return " " + key + label // leading space = left padding per shortcut
 	}
 
 	var pills []string
@@ -202,6 +201,52 @@ func (m Model) renderClearMenu() string {
 		BorderForeground(lipgloss.Color("205")).
 		Padding(1).
 		Width(min(50, m.width-4)).
+		Render(content)
+	return overlay
+}
+
+// renderHelpOverlay shows a modal with the full command list
+func (m Model) renderHelpOverlay() string {
+	var lines []string
+	lines = append(lines, "Help — Key Bindings (Esc/? to close)")
+	lines = append(lines, "")
+	lines = append(lines, "Navigation:")
+	lines = append(lines, "  PgUp/PgDn  — scroll by page")
+	lines = append(lines, "  Home/End   — jump to top/bottom")
+	lines = append(lines, "  Wheel      — scroll")
+	lines = append(lines, "")
+	lines = append(lines, "Find/Highlight:")
+	lines = append(lines, "  f          — Find; Up/Down jump matches")
+	lines = append(lines, "  h          — Highlight (no jump)")
+	lines = append(lines, "  Esc        — Clear active Find")
+	lines = append(lines, "")
+	lines = append(lines, "Filters:")
+	lines = append(lines, "  F          — Filter In")
+	lines = append(lines, "  U          — Filter Out")
+	lines = append(lines, "  c / C      — Clear filters (menu / all)")
+	lines = append(lines, "")
+	lines = append(lines, "Severity:")
+	lines = append(lines, "  1..9       — Toggle buckets")
+	lines = append(lines, "  Shift+1..9 — Focus a bucket; press again to enable all")
+	lines = append(lines, "  0          — Enable all")
+	lines = append(lines, "")
+	lines = append(lines, "Docker:")
+	lines = append(lines, "  l          — Containers list")
+	lines = append(lines, "  P          — Presets")
+	lines = append(lines, "  R          — Reconnect Docker")
+	lines = append(lines, "")
+	lines = append(lines, "Misc:")
+	lines = append(lines, "  T          — Cycle theme")
+	lines = append(lines, "  Ctrl+S     — Selection mode (toggle)")
+	lines = append(lines, "  ^Q         — Quit")
+
+	content := strings.Join(lines, "\n")
+	width := min(72, m.width-4)
+	overlay := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(1).
+		Width(width).
 		Render(content)
 	return overlay
 }

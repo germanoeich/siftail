@@ -96,6 +96,9 @@ type Model struct {
 
 	// Selection-friendly mode (mouse disabled, alt screen off)
 	selectionMode bool
+
+	// Help overlay
+	helpOpen bool
 }
 
 // NewModel creates a new TUI model with default configuration
@@ -213,6 +216,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "r":
 				m = m.refreshPresetsList()
 			}
+		} else if m.helpOpen {
+			// Help overlay interactions
+			switch msg.String() {
+			case "q", "esc", "?", "enter":
+				m.helpOpen = false
+			}
 		} else if m.clearMenuOpen {
 			// Clear menu navigation and actions
 			switch msg.String() {
@@ -286,8 +295,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.clearMenuSel = 0
 			case "C":
 				m = m.clearAllFilters()
+			case "?":
+				m.helpOpen = true
 
-			// Find navigation (only when find is active)
+				// Find navigation (only when find is active)
 			case "up":
 				if m.search.IsActive() {
 					m = m.navigateFind(true) // previous
