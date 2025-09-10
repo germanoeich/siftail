@@ -2,9 +2,9 @@ package core
 
 // VisiblePlan defines the criteria for determining which log events should be visible
 type VisiblePlan struct {
-	Include       *Filters               // Include/exclude filters from Filters
-	LevelMap      *LevelMap              // Severity level mapping and enabled state
-	DockerVisible map[string]bool        // Container visibility by name or id (empty means all visible)
+	Include       *Filters        // Include/exclude filters from Filters
+	LevelMap      *LevelMap       // Severity level mapping and enabled state
+	DockerVisible map[string]bool // Container visibility by name or id (empty means all visible)
 }
 
 // ComputeVisible returns a filtered slice of events that should be visible
@@ -16,13 +16,13 @@ func ComputeVisible(events []LogEvent, plan VisiblePlan) []LogEvent {
 	}
 
 	result := make([]LogEvent, 0, len(events))
-	
+
 	for _, event := range events {
 		if ShouldShowEvent(event, plan) {
 			result = append(result, event)
 		}
 	}
-	
+
 	return result
 }
 
@@ -32,7 +32,7 @@ func ShouldShowEvent(event LogEvent, plan VisiblePlan) bool {
 	if plan.LevelMap != nil && !plan.LevelMap.IsEnabled(event.Level) {
 		return false
 	}
-	
+
 	// 2. Check Docker container visibility (only in docker mode)
 	if len(plan.DockerVisible) > 0 {
 		if event.Source == SourceDocker {
@@ -49,12 +49,12 @@ func ShouldShowEvent(event LogEvent, plan VisiblePlan) bool {
 			}
 		}
 	}
-	
+
 	// 3. Check include/exclude filters
 	if plan.Include != nil && !plan.Include.ShouldShowLine(event.Line) {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -63,14 +63,14 @@ func FilterEventsByLevel(events []LogEvent, levelMap *LevelMap) []LogEvent {
 	if levelMap == nil {
 		return events
 	}
-	
+
 	result := make([]LogEvent, 0, len(events))
 	for _, event := range events {
 		if levelMap.IsEnabled(event.Level) {
 			result = append(result, event)
 		}
 	}
-	
+
 	return result
 }
 
@@ -79,7 +79,7 @@ func FilterEventsByContainer(events []LogEvent, dockerVisible map[string]bool) [
 	if len(dockerVisible) == 0 {
 		return events
 	}
-	
+
 	result := make([]LogEvent, 0, len(events))
 	for _, event := range events {
 		if event.Source != SourceDocker {
@@ -87,12 +87,12 @@ func FilterEventsByContainer(events []LogEvent, dockerVisible map[string]bool) [
 			result = append(result, event)
 			continue
 		}
-		
+
 		// Check visibility by container name
 		if visible, exists := dockerVisible[event.Container]; exists && visible {
 			result = append(result, event)
 		}
 	}
-	
+
 	return result
 }

@@ -1,27 +1,34 @@
 package cli
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/germanoeich/siftail/internal/core"
+	"github.com/germanoeich/siftail/internal/dockerx"
+	"github.com/germanoeich/siftail/internal/input"
 	"github.com/germanoeich/siftail/internal/tui"
 )
 
 // Config holds the parsed command-line configuration
 type Config struct {
-	Mode         tui.Mode
-	FilePath     string
-	BufferSize   int
-	FromStart    bool
-	NoColor      bool
-	TimeFormat   string
-	ShowHelp     bool
-	ShowVersion  bool
+	Mode        tui.Mode
+	FilePath    string
+	BufferSize  int
+	FromStart   bool
+	NoColor     bool
+	TimeFormat  string
+	ShowHelp    bool
+	ShowVersion bool
 }
 
 // DefaultConfig returns a configuration with sensible defaults
@@ -161,56 +168,222 @@ func Run(config Config) error {
 	// Create TUI model
 	model := tui.NewModel(ring, filters, search, levels, config.Mode)
 
-	// Configure based on CLI options
-	if config.NoColor {
-		// TODO: Implement color disabling
-	}
+	// Bubble Tea program (created before starting readers so we can send refresh msgs)
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Wire input -> ring and notify UI
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Initialize data source based on mode
 	switch config.Mode {
 	case tui.ModeFile:
-		if err := startFileReader(config.FilePath, config.FromStart, ring); err != nil {
+		if err := startFileReader(ctx, config.FilePath, config.FromStart, ring, program); err != nil {
 			return fmt.Errorf("failed to start file reader: %w", err)
 		}
 
 	case tui.ModeStdin:
-		if err := startStdinReader(ring); err != nil {
+		if err := startStdinReader(ctx, ring, program); err != nil {
 			return fmt.Errorf("failed to start stdin reader: %w", err)
 		}
 
 	case tui.ModeDocker:
-		if err := startDockerReader(ring); err != nil {
+		if err := startDockerReader(ctx, ring, levels, program); err != nil {
 			return fmt.Errorf("failed to start docker reader: %w", err)
 		}
 	}
 
-	// Start the TUI
-	program := tea.NewProgram(model, tea.WithAltScreen())
+	// Run the TUI (blocks until exit)
 	_, err := program.Run()
+
+	// Ensure readers are stopped
+	cancel()
 	return err
 }
 
+// uiRefresher is the minimal interface we need from a Bubble Tea program
+type uiRefresher interface {
+	Send(msg tea.Msg)
+}
+
+// wireEventStream pumps events from a reader into the ring and notifies the UI
+func wireEventStream(ctx context.Context, events <-chan core.LogEvent, errs <-chan error, ring *core.Ring, ui uiRefresher) {
+	// Events
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-events:
+				if !ok {
+					return
+				}
+				ring.Append(e)
+				// Trigger a refresh in the UI without blocking
+				if ui != nil {
+					ui.Send(tui.RefreshCmd()())
+				}
+			}
+		}
+	}()
+
+	// Errors
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err, ok := <-errs:
+				if !ok {
+					return
+				}
+				// Print to stderr; model also shows count via status if desired later
+				fmt.Fprintf(os.Stderr, "input error: %v\n", err)
+			}
+		}
+	}()
+}
+
 // startFileReader initializes file tailing for the given path
-func startFileReader(filePath string, fromStart bool, ring *core.Ring) error {
-	// TODO: Implement file reader using internal/input package
-	// This is a placeholder implementation
-	fmt.Printf("Would start file reader for: %s (fromStart: %v)\n", filePath, fromStart)
+func startFileReader(ctx context.Context, filePath string, fromStart bool, ring *core.Ring, ui uiRefresher) error {
+	// Optional prefill: when not starting from beginning, show recent tail so users see content immediately
+	if !fromStart {
+		_ = prefillLastLines(filePath, 200, 512*1024, ring, ui)
+	}
+
+	reader := input.NewFileReader(filePath, fromStart)
+	events, errs := reader.Start(ctx)
+	wireEventStream(ctx, events, errs, ring, ui)
 	return nil
 }
 
 // startStdinReader initializes stdin streaming
-func startStdinReader(ring *core.Ring) error {
-	// TODO: Implement stdin reader using internal/input package
-	// This is a placeholder implementation
-	fmt.Println("Would start stdin reader")
+func startStdinReader(ctx context.Context, ring *core.Ring, ui uiRefresher) error {
+	reader := input.NewStdinReader()
+	events, errs := reader.Start(ctx)
+	wireEventStream(ctx, events, errs, ring, ui)
 	return nil
 }
 
 // startDockerReader initializes docker container streaming
-func startDockerReader(ring *core.Ring) error {
-	// TODO: Implement docker reader using internal/input package
-	// This is a placeholder implementation
-	fmt.Println("Would start docker reader")
+func startDockerReader(ctx context.Context, ring *core.Ring, levels *core.LevelMap, ui uiRefresher) error {
+	// Create real docker client
+	real, err := dockerx.NewRealClient()
+	if err != nil {
+		// Surface a recoverable error to the UI
+		if ui != nil {
+			ui.Send(tui.DockerErrorMsg{Error: err, Recoverable: true})
+		}
+		return err
+	}
+
+	detector := core.NewDefaultSeverityDetector(levels)
+	reader := input.NewDockerReader(real, detector)
+
+	events, errs := reader.Start(ctx)
+	wireEventStream(ctx, events, errs, ring, ui)
+
+	// Periodically push container list snapshots to the UI
+	go func() {
+		// Send an initial snapshot soon after start
+		tick := time.NewTicker(2 * time.Second)
+		defer tick.Stop()
+		for {
+			// Build name->visible map (default visible=true)
+			containers := reader.GetContainers()
+			m := make(map[string]bool, len(containers))
+			for _, c := range containers {
+				if c.Name != "" {
+					m[c.Name] = true
+				} else {
+					m[c.ID] = true
+				}
+			}
+			if ui != nil {
+				ui.Send(tui.DockerContainersMsg{Containers: m})
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+
+	return nil
+}
+
+// prefillLastLines reads up to the last N lines (bounded by maxBytes) and appends them to the ring.
+// This does not affect the tailer position; it's just an initial snapshot for user context.
+func prefillLastLines(path string, maxLines int, maxBytes int64, ring *core.Ring, ui uiRefresher) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+
+	size := st.Size()
+	if size == 0 {
+		return nil
+	}
+
+	// Determine how many bytes to read from the end
+	readBytes := size
+	if readBytes > maxBytes {
+		readBytes = maxBytes
+	}
+
+	// Seek to start position for reading
+	start := size - readBytes
+	if _, err := f.Seek(start, 0); err != nil {
+		return err
+	}
+
+	// Read chunk
+	buf := make([]byte, readBytes)
+	if _, err := io.ReadFull(f, buf); err != nil && err != io.ErrUnexpectedEOF {
+		return err
+	}
+
+	// Split into lines; if we started mid-line, drop the first partial
+	lines := bufio.NewScanner(bytes.NewReader(buf))
+	lines.Split(bufio.ScanLines)
+	var all []string
+	for lines.Scan() {
+		all = append(all, lines.Text())
+	}
+	if len(all) == 0 {
+		return nil
+	}
+	// If we did not start at byte 0, the first scanned line is partial; drop it
+	if start > 0 {
+		all = all[1:]
+	}
+	// Keep only the last maxLines
+	if len(all) > maxLines {
+		all = all[len(all)-maxLines:]
+	}
+
+	// Append to ring in order
+	for _, line := range all {
+		ring.Append(core.LogEvent{
+			Time:      time.Now(),
+			Source:    core.SourceFile,
+			Line:      line,
+			Level:     core.SevUnknown,
+			LevelStr:  "",
+			Container: "",
+		})
+	}
+	if ui != nil && len(all) > 0 {
+		ui.Send(tui.RefreshCmd()())
+	}
 	return nil
 }
 
@@ -281,7 +454,7 @@ func parseTimeFormat(format string) (string, error) {
 	if len(format) == 0 {
 		return "", errors.New("empty time format")
 	}
-	
+
 	return format, nil
 }
 

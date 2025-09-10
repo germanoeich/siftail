@@ -13,12 +13,12 @@ import (
 // Styling constants and themes
 var (
 	// Color palette
-	colorDebug    = lipgloss.Color("240") // Gray
-	colorInfo     = lipgloss.Color("36")  // Cyan
-	colorWarn     = lipgloss.Color("11")  // Yellow
-	colorError    = lipgloss.Color("9")   // Red
-	colorOther    = lipgloss.Color("13")  // Magenta
-	colorContainer = lipgloss.Color("33") // Blue
+	colorDebug     = lipgloss.Color("240") // Gray
+	colorInfo      = lipgloss.Color("36")  // Cyan
+	colorWarn      = lipgloss.Color("11")  // Yellow
+	colorError     = lipgloss.Color("9")   // Red
+	colorOther     = lipgloss.Color("13")  // Magenta
+	colorContainer = lipgloss.Color("33")  // Blue
 	colorTimestamp = lipgloss.Color("240") // Gray
 
 	// Highlight colors
@@ -191,7 +191,7 @@ func (m Model) renderStatusLine() string {
 	}
 
 	statusLine := strings.Join(parts, " | ")
-	
+
 	// Pad to full width and apply style
 	statusLine = lipgloss.NewStyle().
 		Width(m.width).
@@ -206,7 +206,7 @@ func (m Model) renderToolbar() string {
 	// First line: main hotkeys
 	var hotkeys []string
 	hotkeys = append(hotkeys, "^Q Quit", "^C Cancel", "h Highlight", "f Find", "F Filter", "U FilterOut")
-	
+
 	if m.mode == ModeDocker {
 		hotkeys = append(hotkeys, "l Containers", "P Presets")
 	}
@@ -217,7 +217,7 @@ func (m Model) renderToolbar() string {
 	levelLine := m.renderLevelMapping()
 
 	// Combine both lines
-	toolbar := lipgloss.JoinVertical(lipgloss.Left, 
+	toolbar := lipgloss.JoinVertical(lipgloss.Left,
 		toolbarStyle.Width(m.width).Render(hotkeyLine),
 		toolbarStyle.Width(m.width).Render(levelLine),
 	)
@@ -228,23 +228,23 @@ func (m Model) renderToolbar() string {
 // renderLevelMapping shows the dynamic severity level mapping
 func (m Model) renderLevelMapping() string {
 	indexToName, enabled := m.levels.GetSnapshot()
-	
+
 	var parts []string
 	for i := 1; i <= 9; i++ {
 		name := indexToName[i]
 		if name == "" {
 			continue // Skip empty slots
 		}
-		
+
 		status := "off"
 		if enabled[i] {
 			status = "on"
 		}
-		
+
 		part := fmt.Sprintf("%d:%s[%s]", i, name, status)
 		parts = append(parts, part)
 	}
-	
+
 	return strings.Join(parts, " ")
 }
 
@@ -340,7 +340,7 @@ func (m Model) renderEventWithFullStyling(event core.LogEvent) string {
 // renderSeverityBadge creates a styled severity level indicator
 func (m Model) renderSeverityBadge(level core.Severity, levelStr string) string {
 	var style lipgloss.Style
-	
+
 	switch level {
 	case core.SevDebug:
 		style = debugBadgeStyle
@@ -363,10 +363,10 @@ func (m Model) renderSeverityBadge(level core.Severity, levelStr string) string 
 func (m Model) applyHighlighting(line string, seq uint64) string {
 	// Check if this line should be highlighted
 	shouldHighlight := m.filters.ShouldHighlight(line)
-	
+
 	// Check if this is the current find hit
 	isCurrentFindHit := m.search.IsActive() && m.search.Current() == seq
-	
+
 	// Check if this line matches the find pattern
 	var findMatcher core.TextMatcher
 	var isFindMatch bool
@@ -398,12 +398,12 @@ func (m Model) applyHighlighting(line string, seq uint64) string {
 // applyAllHighlights applies all highlight patterns to a line
 func (m Model) applyAllHighlights(line string) string {
 	result := line
-	
+
 	// Apply each highlight pattern
 	for _, highlight := range m.filters.Highlights {
 		result = m.applyInlineHighlight(result, highlight, highlightStyle)
 	}
-	
+
 	return result
 }
 
@@ -429,7 +429,7 @@ func (m Model) applySubstringHighlight(line string, matcher core.TextMatcher, st
 	// Case-insensitive find and replace
 	lowerLine := strings.ToLower(line)
 	lowerPattern := strings.ToLower(pattern)
-	
+
 	if !strings.Contains(lowerLine, lowerPattern) {
 		return line
 	}
@@ -437,27 +437,27 @@ func (m Model) applySubstringHighlight(line string, matcher core.TextMatcher, st
 	// Find all occurrences and replace them with styled versions
 	result := line
 	startIdx := 0
-	
+
 	for {
 		idx := strings.Index(strings.ToLower(result[startIdx:]), lowerPattern)
 		if idx == -1 {
 			break
 		}
-		
+
 		actualIdx := startIdx + idx
 		actualEnd := actualIdx + len(pattern)
-		
+
 		// Extract the actual case-preserved match
 		originalMatch := result[actualIdx:actualEnd]
 		styledMatch := style.Render(originalMatch)
-		
+
 		// Replace in the result string
 		result = result[:actualIdx] + styledMatch + result[actualEnd:]
-		
+
 		// Move past this match (accounting for style escape sequences)
 		startIdx = actualIdx + len(styledMatch)
 	}
-	
+
 	return result
 }
 
@@ -468,13 +468,13 @@ func (m Model) applyRegexHighlight(line string, matcher core.TextMatcher, style 
 	if len(raw) < 3 || !strings.HasPrefix(raw, "/") || !strings.HasSuffix(raw, "/") {
 		return line
 	}
-	
+
 	pattern := raw[1 : len(raw)-1]
 	regex, err := regexp.Compile("(?i)" + pattern)
 	if err != nil {
 		return line // If regex is invalid, return original line
 	}
-	
+
 	// Find all matches and replace with styled versions
 	return regex.ReplaceAllStringFunc(line, func(match string) string {
 		return style.Render(match)
@@ -489,7 +489,7 @@ func (m Model) truncateToWidth(line string, maxWidth int) string {
 
 	// Account for escape sequences by using display width
 	displayWidth := lipgloss.Width(line)
-	
+
 	if displayWidth <= maxWidth {
 		return line
 	}
@@ -499,7 +499,7 @@ func (m Model) truncateToWidth(line string, maxWidth int) string {
 	if len(line) > maxWidth-3 {
 		return line[:maxWidth-3] + "..."
 	}
-	
+
 	return line
 }
 
@@ -537,7 +537,7 @@ func (m Model) renderDockerContainerList() string {
 		if m.dockerUI.Containers[container] {
 			status = "[x]"
 		}
-		
+
 		line := fmt.Sprintf("  %s %s", status, container)
 		if m.dockerUI.SelectedContainer == i {
 			line = "> " + line[2:] // Highlight selection
@@ -574,7 +574,7 @@ func (m Model) renderDockerPresetManager() string {
 		// List presets
 		for i, preset := range m.dockerUI.Presets {
 			line := fmt.Sprintf("  %s", preset.Name)
-			
+
 			// Show container count
 			visibleCount := 0
 			totalCount := len(preset.Visible)
@@ -584,7 +584,7 @@ func (m Model) renderDockerPresetManager() string {
 				}
 			}
 			line += fmt.Sprintf(" (%d/%d visible)", visibleCount, totalCount)
-			
+
 			// Highlight selected preset
 			if i == m.dockerUI.SelectedPreset {
 				line = "> " + line[2:] // Replace indentation with selection indicator
@@ -593,10 +593,10 @@ func (m Model) renderDockerPresetManager() string {
 					Foreground(lipgloss.Color("15")).
 					Render(line)
 			}
-			
+
 			lines = append(lines, line)
 		}
-		
+
 		lines = append(lines, "")
 		lines = append(lines, "Actions: Enter=Apply, s=Save Current, d=Delete Selected, r=Refresh")
 	}
@@ -620,4 +620,3 @@ func min(a, b int) int {
 	}
 	return b
 }
-

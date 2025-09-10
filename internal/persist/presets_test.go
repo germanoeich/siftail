@@ -3,8 +3,8 @@ package persist
 import (
 	"os"
 	"path/filepath"
-	"testing"
 	"runtime"
+	"testing"
 )
 
 func TestPresets_SaveAndLoad(t *testing.T) {
@@ -60,11 +60,11 @@ func TestPresets_SaveAndLoad(t *testing.T) {
 		if preset.Name != testPresets[i].Name {
 			t.Errorf("Preset name mismatch: expected %s, got %s", testPresets[i].Name, preset.Name)
 		}
-		
+
 		if len(preset.Visible) != len(testPresets[i].Visible) {
 			t.Errorf("Preset visibility length mismatch for %s", preset.Name)
 		}
-		
+
 		for container, visible := range testPresets[i].Visible {
 			if preset.Visible[container] != visible {
 				t.Errorf("Preset visibility mismatch for %s.%s: expected %v, got %v",
@@ -111,7 +111,7 @@ func TestPresets_IgnoresMissingContainers(t *testing.T) {
 	preset := Preset{
 		Name: "test-preset",
 		Visible: map[string]bool{
-			"existing-container":    true,
+			"existing-container":     true,
 			"non-existing-container": true,
 		},
 	}

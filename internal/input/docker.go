@@ -84,7 +84,7 @@ func (vs *VisibleSet) ToggleAll(containerIDs []string) {
 func (vs *VisibleSet) GetSnapshot() map[string]bool {
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
-	
+
 	snapshot := make(map[string]bool)
 	for k, v := range vs.On {
 		snapshot[k] = v
@@ -97,12 +97,12 @@ type DockerReader struct {
 	client      dockerx.Client
 	levelDetect core.SeverityDetector
 	visible     *VisibleSet
-	
+
 	// Internal state
-	mu              sync.RWMutex
-	containers      []dockerx.Container
-	activeStreams   map[string]context.CancelFunc // containerID -> cancel func
-	streamWG        sync.WaitGroup                // tracks active processStream goroutines
+	mu            sync.RWMutex
+	containers    []dockerx.Container
+	activeStreams map[string]context.CancelFunc // containerID -> cancel func
+	streamWG      sync.WaitGroup                // tracks active processStream goroutines
 }
 
 // NewDockerReader creates a new Docker log reader
@@ -124,7 +124,7 @@ func (dr *DockerReader) GetVisibleSet() *VisibleSet {
 func (dr *DockerReader) GetContainers() []dockerx.Container {
 	dr.mu.RLock()
 	defer dr.mu.RUnlock()
-	
+
 	result := make([]dockerx.Container, len(dr.containers))
 	copy(result, dr.containers)
 	return result
@@ -282,7 +282,7 @@ func (dr *DockerReader) streamContainer(ctx context.Context, container dockerx.C
 func (dr *DockerReader) processStream(ctx context.Context, reader io.ReadCloser, container dockerx.Container, streamType string, eventCh chan<- core.LogEvent, errCh chan<- error) {
 	defer dr.streamWG.Done()
 	defer reader.Close()
-	
+
 	scanner := bufio.NewScanner(reader)
 	var seq uint64
 
@@ -294,12 +294,12 @@ func (dr *DockerReader) processStream(ctx context.Context, reader io.ReadCloser,
 		}
 
 		line := scanner.Text()
-		
+
 		// Parse timestamp from Docker log format if present
 		// Docker logs format: "2023-01-01T12:00:00.000000000Z message"
 		timestamp := time.Now()
 		message := line
-		
+
 		// Try to extract timestamp from Docker format
 		if len(line) > 30 && line[29] == 'Z' && line[30] == ' ' {
 			if t, err := time.Parse(time.RFC3339Nano, line[:30]); err == nil {

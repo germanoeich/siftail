@@ -295,7 +295,6 @@ func (f *FileReader) checkForTruncation() bool {
 	return false
 }
 
-
 // createLogEvent creates a LogEvent from a line of input
 func (f *FileReader) createLogEvent(line string) core.LogEvent {
 	seq := atomic.AddUint64(&f.seq, 1)

@@ -100,7 +100,7 @@ func TestVisibleSet_ToggleAndAll(t *testing.T) {
 func TestDockerReader_StreamsAllContainers_Fake(t *testing.T) {
 	// Create fake client with some containers and log data
 	fakeClient := dockerx.NewFakeClient()
-	
+
 	// Add running containers
 	fakeClient.AddContainer("container1", "app1", "running")
 	fakeClient.AddContainer("container2", "app2", "running")

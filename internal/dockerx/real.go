@@ -58,6 +58,12 @@ func (c *RealClient) ListContainers(ctx context.Context) ([]Container, error) {
 
 // StreamLogs returns a log stream for the given container
 func (c *RealClient) StreamLogs(ctx context.Context, id string, since string) (io.ReadCloser, error) {
+	// Inspect to determine if the container has TTY enabled
+	inspect, err := c.client.ContainerInspect(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
 	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -80,11 +86,20 @@ func (c *RealClient) StreamLogs(ctx context.Context, id string, since string) (i
 	go func() {
 		defer pw.Close()
 		defer logs.Close()
+		if inspect.Config != nil && inspect.Config.Tty {
+			// With TTY enabled, the stream is not multiplexed; copy directly
+			if _, err := io.Copy(pw, logs); err != nil && err != context.Canceled {
+				pw.CloseWithError(fmt.Errorf("tty log copy error: %w", err))
+			}
+			return
+		}
 
-		// Use stdcopy to demultiplex the Docker log stream
-		_, err := stdcopy.StdCopy(pw, pw, logs)
-		if err != nil {
-			pw.CloseWithError(fmt.Errorf("log demux error: %w", err))
+		// Without TTY, use stdcopy to demultiplex the Docker log stream
+		if _, err := stdcopy.StdCopy(pw, pw, logs); err != nil {
+			// Fallback copy when headers are unrecognized (non-multiplexed stream)
+			if _, copyErr := io.Copy(pw, logs); copyErr != nil && copyErr != context.Canceled {
+				pw.CloseWithError(fmt.Errorf("log demux error: %v; raw copy error: %v", err, copyErr))
+			}
 		}
 	}()
 

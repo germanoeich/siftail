@@ -38,7 +38,7 @@ func NewPresetsManager() (*PresetsManager, error) {
 // getConfigPath returns the platform-specific config directory path for siftail
 func getConfigPath() (string, error) {
 	var configDir string
-	
+
 	switch runtime.GOOS {
 	case "windows":
 		appData := os.Getenv("APPDATA")
@@ -160,12 +160,12 @@ func (p *PresetsManager) GetPreset(name string) (*Preset, error) {
 // It maps by container name first, then falls back to ID if name lookup fails
 func ApplyPreset(preset Preset, currentContainers map[string]bool) map[string]bool {
 	result := make(map[string]bool)
-	
+
 	// Start with current settings
 	for name, visible := range currentContainers {
 		result[name] = visible
 	}
-	
+
 	// Apply preset settings (by container name)
 	for containerName, visible := range preset.Visible {
 		if _, exists := result[containerName]; exists {
@@ -174,19 +174,19 @@ func ApplyPreset(preset Preset, currentContainers map[string]bool) map[string]bo
 		// Note: We ignore containers in the preset that don't exist in current containers
 		// This allows presets to work across different environments where not all containers exist
 	}
-	
+
 	return result
 }
 
 // CreatePresetFromCurrent creates a new preset from the current container visibility state
 func CreatePresetFromCurrent(name string, currentContainers map[string]bool) Preset {
 	visible := make(map[string]bool)
-	
+
 	// Copy current visibility settings
 	for containerName, isVisible := range currentContainers {
 		visible[containerName] = isVisible
 	}
-	
+
 	return Preset{
 		Name:    name,
 		Visible: visible,

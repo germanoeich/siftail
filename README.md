@@ -12,6 +12,9 @@ Tail a file with rotation and truncation awareness:
 siftail /var/log/app.log
 ```
 
+Notes:
+- By default, siftail tails from the end and prefills the view with up to the last 200 lines (reading at most ~512KB). Use `--from-start` to load the entire existing file before tailing.
+
 ### Docker Mode  
 Stream logs from all running containers:
 ```bash

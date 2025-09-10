@@ -40,7 +40,7 @@ func (s *SearchState) IsActive() bool {
 func (s *SearchState) SetMatcher(matcher TextMatcher) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	s.Matcher = matcher
 	s.HitSeqs = s.HitSeqs[:0] // clear existing hits
 	s.Cursor = -1
@@ -58,7 +58,7 @@ func (s *SearchState) GetMatcher() TextMatcher {
 func (s *SearchState) AddHit(seq uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Find insertion position using binary search
 	left, right := 0, len(s.HitSeqs)
 	for left < right {
@@ -69,12 +69,12 @@ func (s *SearchState) AddHit(seq uint64) {
 			right = mid
 		}
 	}
-	
+
 	// Check if sequence already exists
 	if left < len(s.HitSeqs) && s.HitSeqs[left] == seq {
 		return // already exists
 	}
-	
+
 	// Insert at the correct position
 	s.HitSeqs = append(s.HitSeqs, 0)
 	copy(s.HitSeqs[left+1:], s.HitSeqs[left:])
@@ -86,18 +86,18 @@ func (s *SearchState) AddHit(seq uint64) {
 func (s *SearchState) RemoveOldHits(oldestSeq uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Find the first sequence number >= oldestSeq
 	cutoff := 0
 	for cutoff < len(s.HitSeqs) && s.HitSeqs[cutoff] < oldestSeq {
 		cutoff++
 	}
-	
+
 	if cutoff > 0 {
 		// Remove old entries
 		copy(s.HitSeqs, s.HitSeqs[cutoff:])
 		s.HitSeqs = s.HitSeqs[:len(s.HitSeqs)-cutoff]
-		
+
 		// Adjust cursor position
 		if s.Cursor >= 0 {
 			s.Cursor -= cutoff
@@ -113,16 +113,16 @@ func (s *SearchState) RemoveOldHits(oldestSeq uint64) {
 func (s *SearchState) Next() uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if len(s.HitSeqs) == 0 {
 		return 0
 	}
-	
+
 	if s.Cursor < len(s.HitSeqs)-1 {
 		s.Cursor++
 		return s.HitSeqs[s.Cursor]
 	}
-	
+
 	// Wrap around to the beginning
 	s.Cursor = 0
 	return s.HitSeqs[s.Cursor]
@@ -133,16 +133,16 @@ func (s *SearchState) Next() uint64 {
 func (s *SearchState) Prev() uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if len(s.HitSeqs) == 0 {
 		return 0
 	}
-	
+
 	if s.Cursor > 0 {
 		s.Cursor--
 		return s.HitSeqs[s.Cursor]
 	}
-	
+
 	// Wrap around to the end
 	s.Cursor = len(s.HitSeqs) - 1
 	return s.HitSeqs[s.Cursor]
@@ -153,7 +153,7 @@ func (s *SearchState) Prev() uint64 {
 func (s *SearchState) Current() uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if s.Cursor >= 0 && s.Cursor < len(s.HitSeqs) {
 		return s.HitSeqs[s.Cursor]
 	}
@@ -172,7 +172,7 @@ func (s *SearchState) Count() int {
 func (s *SearchState) Position() (current, total int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	total = len(s.HitSeqs)
 	if s.Cursor >= 0 && s.Cursor < total {
 		current = s.Cursor + 1 // convert to 1-based
@@ -185,11 +185,11 @@ func (s *SearchState) Position() (current, total int) {
 func (s *SearchState) JumpToFirst() uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if len(s.HitSeqs) == 0 {
 		return 0
 	}
-	
+
 	s.Cursor = 0
 	return s.HitSeqs[s.Cursor]
 }
@@ -199,7 +199,7 @@ func (s *SearchState) JumpToFirst() uint64 {
 func (s *SearchState) SetCurrentBySeq(seq uint64) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Binary search for the sequence
 	left, right := 0, len(s.HitSeqs)
 	for left < right {
@@ -210,12 +210,12 @@ func (s *SearchState) SetCurrentBySeq(seq uint64) bool {
 			right = mid
 		}
 	}
-	
+
 	if left < len(s.HitSeqs) && s.HitSeqs[left] == seq {
 		s.Cursor = left
 		return true
 	}
-	
+
 	return false
 }
 
@@ -223,7 +223,7 @@ func (s *SearchState) SetCurrentBySeq(seq uint64) bool {
 func (s *SearchState) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	s.HitSeqs = s.HitSeqs[:0]
 	s.Cursor = -1
 }
@@ -232,11 +232,11 @@ func (s *SearchState) Clear() {
 func (s *SearchState) GetSnapshot() (active bool, hitSeqs []uint64, cursor int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	active = s.Active
 	hitSeqs = make([]uint64, len(s.HitSeqs))
 	copy(hitSeqs, s.HitSeqs)
 	cursor = s.Cursor
-	
+
 	return
 }
