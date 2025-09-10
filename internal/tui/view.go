@@ -137,26 +137,47 @@ func (m Model) renderStatusLine() string {
 
 // renderToolbar displays the nano-style hotkey toolbar
 func (m Model) renderToolbar() string {
-	// First line: main hotkeys
-	var hotkeys []string
-	hotkeys = append(hotkeys, "^Q Quit", "Home/End", "PgUp/PgDn", "Wheel", "1..9 Toggle", "Shift+1..9 Focus", "h Highlight", "f Find", "F Filter", "U FilterOut", "c Clear", "C ClearAll")
-
+	// First line: render hotkeys as per-element "pills"
+	type hk struct{ key, label string }
+	var keys []hk
+	keys = append(keys,
+		hk{"^Q", "Quit"},
+		hk{"Home/End", "Scroll"},
+		hk{"PgUp/PgDn", "Scroll"},
+		hk{"Wheel", "Scroll"},
+		hk{"1..9", "Toggle"},
+		hk{"Shift+1..9", "Focus"},
+		hk{"0", "EnableAll"},
+		hk{"h", "Highlight"},
+		hk{"f", "Find"},
+		hk{"F", "FilterIn"},
+		hk{"U", "FilterOut"},
+		hk{"c", "Clear"},
+		hk{"C", "ClearAll"},
+		hk{"T", "Theme"},
+	)
 	if m.mode == ModeDocker {
-		hotkeys = append(hotkeys, "l Containers", "P Presets")
+		keys = append(keys, hk{"l", "Containers"}, hk{"P", "Presets"})
 	}
 
-	hotkeyLine := strings.Join(hotkeys, "  ")
+	renderHK := func(k hk) string {
+		inner := lipgloss.JoinHorizontal(lipgloss.Left,
+			m.theme.HotkeyKeyStyle.Render(k.key),
+			lipgloss.NewStyle().PaddingLeft(1).Render(k.label),
+		)
+		return m.theme.HotkeyPillStyle.Render(inner)
+	}
 
-	// Second line: severity level mapping
-	levelLine := m.renderLevelMapping()
+	var pills []string
+	for _, k := range keys {
+		pills = append(pills, renderHK(k))
+	}
+	hotkeyLine := strings.Join(pills, "")
 
-	// Combine both lines
-	toolbar := lipgloss.JoinVertical(lipgloss.Left,
-		m.theme.ToolbarStyle.Width(m.width).Render(hotkeyLine),
-		m.theme.ToolbarStyle.Width(m.width).Render(levelLine),
-	)
+	// Second line: severity level mapping (plain, no full-width background)
+	levelLine := m.theme.ToolbarStyle.Render(m.renderLevelMapping())
 
-	return toolbar
+	return lipgloss.JoinVertical(lipgloss.Left, hotkeyLine, levelLine)
 }
 
 // renderClearMenu draws a small menu to clear filters/highlights selectively

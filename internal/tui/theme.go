@@ -21,9 +21,12 @@ type Theme struct {
 	FindHitStyle   lipgloss.Style
 
 	// Chrome
-	ToolbarStyle lipgloss.Style
-	StatusStyle  lipgloss.Style
-	PromptStyle  lipgloss.Style
+	ToolbarStyle     lipgloss.Style
+	HotkeyPillStyle  lipgloss.Style
+	HotkeyKeyStyle   lipgloss.Style
+	HotkeyLabelStyle lipgloss.Style
+	StatusStyle      lipgloss.Style
+	PromptStyle      lipgloss.Style
 }
 
 func DarkTheme() *Theme {
@@ -41,9 +44,12 @@ func DarkTheme() *Theme {
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("220")).Foreground(lipgloss.Color("0")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("201")).Foreground(lipgloss.Color("15")).Bold(true),
 
-		ToolbarStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("15")).Bold(true).Padding(0, 1),
-		StatusStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("246")).Italic(true),
-		PromptStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("81")).Bold(true),
+		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Bold(true),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("15")).Padding(0, 1).MarginRight(1),
+		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
+		HotkeyLabelStyle: lipgloss.NewStyle().Faint(true),
+		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("246")).Italic(true),
+		PromptStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("81")).Bold(true),
 	}
 }
 
@@ -63,9 +69,12 @@ func DraculaTheme() *Theme {
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("228")).Foreground(lipgloss.Color("0")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("141")).Foreground(lipgloss.Color("231")).Bold(true),
 
-		ToolbarStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("235")).Background(lipgloss.Color("231")).Bold(true).Padding(0, 1),
-		StatusStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
-		PromptStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true),
+		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("235")).Bold(true),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("250")).Foreground(lipgloss.Color("235")).Padding(0, 1).MarginRight(1),
+		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
+		HotkeyLabelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("60")),
+		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
+		PromptStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true),
 	}
 }
 
@@ -85,9 +94,12 @@ func NordTheme() *Theme {
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("153")).Foreground(lipgloss.Color("234")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("39")).Foreground(lipgloss.Color("230")).Bold(true),
 
-		ToolbarStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Background(lipgloss.Color("195")).Bold(true).Padding(0, 1),
-		StatusStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
-		PromptStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true),
+		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Bold(true),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("195")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1),
+		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
+		HotkeyLabelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("236")),
+		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
+		PromptStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true),
 	}
 }
 
@@ -106,9 +118,12 @@ func LightTheme() *Theme {
 		HighlightStyle: lipgloss.NewStyle().Background(lipgloss.Color("227")).Foreground(lipgloss.Color("0")),
 		FindHitStyle:   lipgloss.NewStyle().Background(lipgloss.Color("171")).Foreground(lipgloss.Color("0")).Bold(true),
 
-		ToolbarStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("253")).Bold(true).Padding(0, 1),
-		StatusStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("60")).Italic(true),
-		PromptStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("27")).Bold(true),
+		ToolbarStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Bold(true),
+		HotkeyPillStyle:  lipgloss.NewStyle().Background(lipgloss.Color("253")).Foreground(lipgloss.Color("0")).Padding(0, 1).MarginRight(1),
+		HotkeyKeyStyle:   lipgloss.NewStyle().Bold(true),
+		HotkeyLabelStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("60")),
+		StatusStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("60")).Italic(true),
+		PromptStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("27")).Bold(true),
 	}
 }
 
