@@ -56,6 +56,7 @@ func (s *StdinReader) Start(ctx context.Context) (<-chan core.LogEvent, <-chan e
 						if len(lineBytes) > 0 {
 							line := string(lineBytes)
 							// Don't trim trailing newline since EOF doesn't guarantee one
+							line = core.SanitizeLine(line)
 							event := s.createLogEvent(line)
 							select {
 							case eventCh <- event:
@@ -83,6 +84,9 @@ func (s *StdinReader) Start(ctx context.Context) (<-chan core.LogEvent, <-chan e
 				if len(line) > 0 && line[len(line)-1] == '\n' {
 					line = line[:len(line)-1]
 				}
+
+				// Sanitize destructive ANSI/control sequences
+				line = core.SanitizeLine(line)
 
 				event := s.createLogEvent(line)
 

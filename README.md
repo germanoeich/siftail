@@ -38,6 +38,8 @@ journalctl -f -u my.service | siftail
 - **Dynamic severity detection** with toggleable levels (1-9)
 - **Docker container management** with presets
 - Handles file rotation, long lines, and high-volume input
+- Ignores destructive terminal control sequences (spinners/clears) for stable rendering
+- Soft-wraps long lines to the viewport width (no ellipses)
 
 ## Build
 
@@ -56,6 +58,15 @@ make race
 
 - Go 1.22+
 - For Docker mode: Docker daemon access (socket permissions apply)
+
+## Notes on terminal control sequences
+
+Some tools (e.g., build/code generators) emit dynamic terminal control sequences to
+update a single line in place (spinners) or to clear regions of the screen.
+These sequences can wreak havoc in a TUI viewport. siftail sanitizes incoming lines
+from all inputs (stdin, files, and Docker) and strips such sequences, converting
+inline carriage returns to spaces while preserving a trailing CR (from CRLF) so
+content remains readable and scrollback stays consistent.
 
 ## License
 

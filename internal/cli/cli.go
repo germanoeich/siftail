@@ -41,7 +41,7 @@ func DefaultConfig() Config {
 		NoColor:    false,
 		FromStart:  true, // default to read entire file
 		NumLines:   -1,   // unset
-		Theme:      "dark",
+		Theme:      "",   // if empty, use persisted theme
 	}
 }
 
@@ -200,7 +200,7 @@ func Run(config Config) error {
 		}
 	}
 
-	// Apply theme prior to run
+	// Apply theme prior to run. Use CLI if provided, else load persisted.
 	if config.Theme != "" {
 		model.SetTheme(config.Theme)
 	}

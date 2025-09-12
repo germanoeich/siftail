@@ -117,6 +117,12 @@ type Model struct {
 
 	// Help overlay
 	helpOpen bool
+
+	// Settings
+	showTimestamps   bool
+	settingsMenuOpen bool
+	settingsSel      int // 0..N-1
+	settingsStore    *persist.SettingsManager
 }
 
 // NewModel creates a new TUI model with default configuration
@@ -133,7 +139,7 @@ func NewModel(ring *core.Ring, filters *core.Filters, search *core.SearchState, 
 	// Initialize presets manager (ignore error for now)
 	presetsManager, _ := persist.NewPresetsManager()
 
-	return &Model{
+	m := &Model{
 		vp:         vp,
 		input:      input,
 		ring:       ring,
@@ -151,12 +157,24 @@ func NewModel(ring *core.Ring, filters *core.Filters, search *core.SearchState, 
 			MaxLineLength:  2048,                  // 2KB per line max
 			RenderThrottle: 33 * time.Millisecond, // ~30 FPS
 		},
-		width:    80,
-		height:   24,
-		seqIndex: make(map[uint64]int),
-		theme:    DarkTheme(),
-		themeIdx: 0,
+		width:          80,
+		height:         24,
+		seqIndex:       make(map[uint64]int),
+		theme:          DarkTheme(),
+		themeIdx:       0,
+		showTimestamps: true,
 	}
+
+	// Load persisted settings (best-effort; ignore errors)
+	if sm, err := persist.NewSettingsManager(); err == nil {
+		m.settingsStore = sm
+		if s, err := sm.Load(); err == nil {
+			m.showTimestamps = s.ShowTimestamps
+			// Theme may be overridden by CLI; we still initialize index
+			m.SetTheme(s.Theme)
+		}
+	}
+	return m
 }
 
 // Init initializes the model for the Bubble Tea runtime
@@ -287,6 +305,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "q", "esc", "?", "enter", "f1":
 				m.helpOpen = false
 			}
+		} else if m.settingsMenuOpen {
+			switch msg.String() {
+			case "ctrl+q", "ctrl+c":
+				return m, tea.Quit
+			case "esc", "q":
+				m.settingsMenuOpen = false
+			case "up":
+				if m.settingsSel > 0 {
+					m.settingsSel--
+				} else {
+					m.settingsSel = 1
+				}
+			case "down":
+				if m.settingsSel < 1 {
+					m.settingsSel++
+				} else {
+					m.settingsSel = 0
+				}
+			case "left":
+				if m.settingsSel == 1 { // theme
+					m.cycleTheme(-1)
+					m.persistSettings()
+				}
+			case "right":
+				if m.settingsSel == 1 { // theme
+					m.cycleTheme(1)
+					m.persistSettings()
+				}
+			case "enter", " ":
+				if m.settingsSel == 0 { // toggle timestamps
+					m.showTimestamps = !m.showTimestamps
+					m.dirty = true
+					m.persistSettings()
+				} else if m.settingsSel == 1 { // theme next
+					m.cycleTheme(1)
+					m.persistSettings()
+				}
+			}
 		} else if m.clearMenuOpen {
 			// Clear menu navigation and actions
 			switch msg.String() {
@@ -335,6 +391,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.startPrompt(PromptHighlight, "Highlight: ")
 			case "ctrl+f":
 				m = m.startPrompt(PromptFind, "Find: ")
+			case "ctrl+o":
+				m.settingsMenuOpen = true
+				m.settingsSel = 0
 			case "I":
 				m = m.startPrompt(PromptFilterIn, "Filter In: ")
 			case "O":
@@ -437,6 +496,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.themeIdx = (m.themeIdx + 1) % len(themes)
 				m.theme = themes[m.themeIdx]
 				m.dirty = true
+				m.persistSettings()
 			case "ctrl+s":
 				if m.selectionMode {
 					// Return to interactive mode: re-enter alt screen and re-enable mouse
@@ -509,6 +569,30 @@ func (m *Model) SetTheme(name string) {
 		}
 	}
 	m.dirty = true
+}
+
+// cycleTheme moves theme index by delta and applies it.
+func (m *Model) cycleTheme(delta int) {
+	if len(themes) == 0 {
+		return
+	}
+	m.themeIdx = (m.themeIdx + delta) % len(themes)
+	if m.themeIdx < 0 {
+		m.themeIdx += len(themes)
+	}
+	m.theme = themes[m.themeIdx]
+	m.dirty = true
+}
+
+// persistSettings saves current settings to disk (best-effort).
+func (m *Model) persistSettings() {
+	if m.settingsStore == nil {
+		return
+	}
+	_ = m.settingsStore.Save(persist.Settings{
+		ShowTimestamps: m.showTimestamps,
+		Theme:          m.theme.Name,
+	})
 }
 
 // handleResize adjusts viewport and other components to new terminal size
@@ -625,9 +709,18 @@ func (m Model) scrollToSequence(seq uint64) Model {
 	if !ok {
 		plan := core.VisiblePlan{Include: m.filters, LevelMap: m.levels, DockerVisible: m.dockerUI.Containers}
 		events := core.ComputeVisible(m.ring.Snapshot(), plan)
+		// Rebuild mapping consistent with wrapping.
 		m.seqIndex = make(map[uint64]int, len(events))
-		for i, e := range events {
-			m.seqIndex[e.Seq] = i
+		lineCursor := 0
+		for _, e := range events {
+			m.seqIndex[e.Seq] = lineCursor
+			styled := m.renderEventWithFullStyling(e)
+			wrapped := wrapStyledToWidth(styled, m.vp.Width)
+			if len(wrapped) == 0 {
+				lineCursor++
+			} else {
+				lineCursor += len(wrapped)
+			}
 		}
 		idx, ok = m.seqIndex[seq]
 		if !ok {
@@ -705,16 +798,21 @@ func (m Model) updateViewportContent() Model {
 
 	events := m.ring.Snapshot()
 	visibleEvents := core.ComputeVisible(events, plan)
-	// Build index for quick scrolling to sequences
-	m.seqIndex = make(map[uint64]int, len(visibleEvents))
-	for i, e := range visibleEvents {
-		m.seqIndex[e.Seq] = i
-	}
 
-	// Render events to viewport content
-	content := m.renderEventsWithFullStyling(visibleEvents)
-	// Split into lines for possible selection overlay and caching
-	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	// Build wrapped content lines and a sequence->line-index map.
+	// Each event may span multiple wrapped lines; map seq to the first line.
+	m.seqIndex = make(map[uint64]int, len(visibleEvents))
+	var lines []string
+	for _, e := range visibleEvents {
+		styled := m.renderEventWithFullStyling(e)
+		wrapped := wrapStyledToWidth(styled, m.vp.Width)
+		if len(wrapped) == 0 {
+			wrapped = []string{""}
+		}
+		// Record the starting line index for this event
+		m.seqIndex[e.Seq] = len(lines)
+		lines = append(lines, wrapped...)
+	}
 
 	// Apply selection overlay if actively selecting
 	if m.selecting {
@@ -722,7 +820,7 @@ func (m Model) updateViewportContent() Model {
 	}
 
 	// Set viewport content from possibly highlighted lines
-	content = strings.Join(lines, "\n")
+	content := strings.Join(lines, "\n")
 	m.vp.SetContent(content)
 
 	// Cache content as lines (styled + plain) for selection/copy
@@ -1203,9 +1301,10 @@ func (m Model) truncateLine(line string) string {
 
 	// Use rune-based truncation to handle Unicode properly
 	runes := []rune(line)
-	if len(runes) <= m.perf.MaxLineLength-3 { // Reserve space for "..."
+	if len(runes) <= m.perf.MaxLineLength {
 		return line
 	}
 
-	return string(runes[:m.perf.MaxLineLength-3]) + "..."
+	// Hard cut without ellipsis (requested behavior)
+	return string(runes[:m.perf.MaxLineLength])
 }

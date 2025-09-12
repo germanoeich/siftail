@@ -399,7 +399,7 @@ func TestDockerErrorMessage_NoManualRetryHint(t *testing.T) {
 	}
 }
 
-func TestLineLength_Truncation(t *testing.T) {
+func TestLineLength_Truncation_NoEllipsis(t *testing.T) {
 	// Setup
 	ring := core.NewRing(100)
 	filters := core.NewFilters()
@@ -413,8 +413,8 @@ func TestLineLength_Truncation(t *testing.T) {
 	longLine := "This is a very long line that should be truncated"
 	truncated := model.truncateLine(longLine)
 
-	// Should be truncated to 10 chars with "..."
-	expected := "This is..."
+	// Should be truncated to first 10 runes without ellipsis
+	expected := "This is a "
 	if truncated != expected {
 		t.Errorf("Expected truncated line %q, got %q", expected, truncated)
 	}

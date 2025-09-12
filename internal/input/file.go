@@ -187,6 +187,7 @@ func (f *FileReader) readAvailableLines(reader *bufio.Reader, eventCh chan<- cor
 				// Process any remaining data without newline
 				if len(lineBytes) > 0 {
 					line := string(lineBytes)
+					line = core.SanitizeLine(line)
 					event := f.createLogEvent(line)
 					select {
 					case eventCh <- event:
@@ -211,6 +212,9 @@ func (f *FileReader) readAvailableLines(reader *bufio.Reader, eventCh chan<- cor
 		if len(line) > 0 && line[len(line)-1] == '\n' {
 			line = line[:len(line)-1]
 		}
+
+		// Sanitize destructive ANSI/control sequences
+		line = core.SanitizeLine(line)
 
 		event := f.createLogEvent(line)
 		select {

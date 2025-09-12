@@ -26,7 +26,7 @@
 * **Filter-out (**\`\`**):** hide lines matching terms/regexes.
 * **Severity filters (**\`\`**):** toggle level buckets on/off; dynamic discovery for custom levels.
 * **Docker controls:** list running containers, toggle individually or **All**, manage visibility **presets** (save/apply/delete).
-* **Performance:** coalesced rendering; configurable ring buffer; handles long lines; remains responsive under bursty input.
+* **Performance:** coalesced rendering; configurable ring buffer; handles long lines with soft wrapping; remains responsive under bursty input.
 
 ## 3) Hotkeys (default)
 
@@ -67,7 +67,7 @@ journalctl -f -u my.service | siftail
 * **Responsiveness:** UI remains interactive under heavy input (e.g., thousands of lines/sec).
 * **Stability:** no goroutine leaks; graceful shutdown on `SIGINT`.
 * **Portability:** Linux/macOS primary; Windows best-effort (fsnotify). No root required (Docker socket permissions apply).
-* **Resource bounds:** ring buffer size is configurable (default \~10k lines); max line length bounded and truncation is visible.
+* **Resource bounds:** ring buffer size is configurable (default \~10k lines); long lines are soft‑wrapped to the viewport; any hard length cap is applied without adding ellipses.
 
 ## 7) Tooling & dependencies
 

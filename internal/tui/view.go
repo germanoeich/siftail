@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	xansi "github.com/charmbracelet/x/ansi"
 	"github.com/germanoeich/siftail/internal/core"
 )
 
@@ -60,6 +61,16 @@ func (m Model) View() string {
 	if m.dockerUI.PresetManagerOpen {
 		overlay := m.renderDockerPresetManager()
 		// Center the overlay on the screen
+		overlayStyle := lipgloss.NewStyle().
+			Align(lipgloss.Center, lipgloss.Center).
+			Width(m.width).
+			Height(m.height)
+		return overlayStyle.Render(overlay)
+	}
+
+	// Settings overlay (if open)
+	if m.settingsMenuOpen {
+		overlay := m.renderSettingsMenu()
 		overlayStyle := lipgloss.NewStyle().
 			Align(lipgloss.Center, lipgloss.Center).
 			Width(m.width).
@@ -154,6 +165,7 @@ func (m Model) renderToolbar() string {
 		hk{"^Q", "Quit"},
 		hk{"h", "Highlight"},
 		hk{"Ctrl+F", "Find"},
+		hk{"Ctrl+O", "Settings"},
 		hk{"I", "FilterIn"},
 		hk{"O", "FilterOut"},
 		hk{"c", "Clear"},
@@ -246,6 +258,7 @@ func (m Model) renderHelpOverlay() string {
 	lines = append(lines, "  p          — Presets")
 	lines = append(lines, "")
 	lines = append(lines, "Misc:")
+	lines = append(lines, "  Ctrl+O     — Settings (timestamps, theme)")
 	lines = append(lines, "  t          — Cycle theme")
 	lines = append(lines, "  Mouse drag — Select and copy")
 	lines = append(lines, "  ^Q         — Quit")
@@ -257,6 +270,39 @@ func (m Model) renderHelpOverlay() string {
 		BorderForeground(lipgloss.Color("63")).
 		Padding(1).
 		Width(width).
+		Render(content)
+	return overlay
+}
+
+// renderSettingsMenu shows toggles for timestamps and theme selection.
+func (m Model) renderSettingsMenu() string {
+	items := []string{
+		"Show Timestamps",
+		"Theme",
+	}
+
+	vals := []string{
+		map[bool]string{true: "On", false: "Off"}[m.showTimestamps],
+		m.theme.Name,
+	}
+
+	var lines []string
+	lines = append(lines, "Settings (Esc/q to close, Enter/Space apply; ←/→ theme)")
+	lines = append(lines, "")
+	for i, it := range items {
+		prefix := "  "
+		if i == m.settingsSel {
+			prefix = "> "
+		}
+		lines = append(lines, fmt.Sprintf("%s%s: %s", prefix, it, vals[i]))
+	}
+
+	content := strings.Join(lines, "\n")
+	overlay := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("99")).
+		Padding(1).
+		Width(min(52, m.width-4)).
 		Render(content)
 	return overlay
 }
@@ -351,7 +397,7 @@ func (m Model) renderEventWithFullStyling(event core.LogEvent) string {
 	var parts []string
 
 	// 1. Timestamp prefix (optional, configurable)
-	if !event.Time.IsZero() {
+	if m.showTimestamps && !event.Time.IsZero() {
 		timestamp := event.Time.Format("15:04:05.000")
 		parts = append(parts, m.theme.TimestampStyle.Render(timestamp))
 	}
@@ -375,8 +421,8 @@ func (m Model) renderEventWithFullStyling(event core.LogEvent) string {
 	// Join all parts with single space
 	fullLine := strings.Join(parts, " ")
 
-	// 5. Truncate if too long for viewport width
-	return m.truncateToWidth(fullLine, m.vp.Width)
+	// 5. Do not truncate here; wrapping happens during content build.
+	return fullLine
 }
 
 // renderSeverityBadge creates a styled severity level indicator
@@ -523,26 +569,51 @@ func (m Model) applyRegexHighlight(line string, matcher core.TextMatcher, style 
 	})
 }
 
-// truncateToWidth ensures a line fits within the specified width
-func (m Model) truncateToWidth(line string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return ""
+// wrapStyledToWidth soft-wraps an ANSI-styled string to the given display width.
+// It uses x/ansi to slice by columns while preserving SGR state.
+func wrapStyledToWidth(s string, width int) []string {
+	if width <= 0 {
+		return []string{""}
 	}
-
-	// Account for escape sequences by using display width
-	displayWidth := lipgloss.Width(line)
-
-	if displayWidth <= maxWidth {
-		return line
+	// Normalize CRLF to LF (viewport already normalizes later, but keep predictable)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	// If the line already contains newlines, wrap each subline independently.
+	parts := strings.Split(s, "\n")
+	var out []string
+	for _, p := range parts {
+		// Fast path
+		w := lipgloss.Width(p)
+		if w <= width {
+			out = append(out, p)
+			continue
+		}
+		// Slice repeatedly until exhausted
+		start := 0
+		for {
+			// Measure remaining text width from start to end
+			rem := xansi.StringWidth(p[start:])
+			if rem <= width {
+				out = append(out, p[start:])
+				break
+			}
+			// Take [start, start+width)
+			seg := xansi.Cut(p[start:], 0, width)
+			out = append(out, seg)
+			// Advance: compute how many visible columns seg has, then move start
+			consumed := xansi.StringWidth(seg)
+			// Move start forward by consumed columns in display terms
+			// Use Cut to skip the same number of columns
+			skipped := xansi.Cut(p[start:], 0, consumed)
+			start += len(skipped)
+			if start >= len(p) {
+				break
+			}
+		}
 	}
-
-	// Simplified truncation - in a real implementation, this would need
-	// to properly handle ANSI escape sequences
-	if len(line) > maxWidth-3 {
-		return line[:maxWidth-3] + "..."
+	if len(out) == 0 {
+		return []string{""}
 	}
-
-	return line
+	return out
 }
 
 // renderDockerContainerList renders the container selection overlay
@@ -641,6 +712,17 @@ func (m Model) renderDockerPresetManager() string {
 
 		lines = append(lines, "")
 		lines = append(lines, "Actions: Enter=Apply, s=Save Current, d=Delete Selected, r=Refresh")
+	}
+
+	if m.inPrompt && m.promptKind == PromptPresetName {
+		lines = append(lines, "")
+		// Inline prompt inside the overlay so the user can see what they type
+		prompt := lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			m.theme.PromptStyle.Render("Save preset as: "),
+			m.input.View(),
+		)
+		lines = append(lines, prompt)
 	}
 
 	// Create bordered overlay
