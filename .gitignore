@@ -1,0 +1,35 @@
+# Binaries
+siftail
+sifttail
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build outputs
+/bin/
+/build/
+/dist/
+/out/
+/target/
+
+# Test & coverage
+*.test
+coverage.*
+*.out
+
+# Logs
+*.log
+
+# Editors/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Go modules/vendor
+vendor/
