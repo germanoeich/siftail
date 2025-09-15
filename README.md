@@ -30,16 +30,15 @@ journalctl -f -u my.service | siftail
 
 ## Features
 
-- Live, scrollable viewport with nano-style toolbar
 - **Highlight** text without scrolling
 - **Find** text and jump between matches  
 - **Filter-in** to show only matching lines
 - **Filter-out** to hide matching lines
 - **Dynamic severity detection** with toggleable levels (1-9)
 - **Docker container management** with presets
+- Live, scrollable viewport with nano-style toolbar
 - Handles file rotation, long lines, and high-volume input
 - Ignores destructive terminal control sequences (spinners/clears) for stable rendering
-- Soft-wraps long lines to the viewport width (no ellipses)
 
 ## Build
 
