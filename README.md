@@ -58,6 +58,10 @@ make race
 - Go 1.22+
 - For Docker mode: Docker daemon access (socket permissions apply)
 
+## Clipboard support
+
+The copy action uses the system clipboard. In terminal environments without native clipboard integration you need one of the common helpers installed: `xsel`, `xclip`, `wl-clipboard`, or `termux-clipboard`. If none of these tools are available the copy functionality is disabled.
+
 ## Notes on terminal control sequences
 
 Some tools (e.g., build/code generators) emit dynamic terminal control sequences to

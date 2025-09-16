@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,7 +14,6 @@ import (
 	"github.com/germanoeich/siftail/internal/core"
 	"github.com/germanoeich/siftail/internal/persist"
 	"github.com/mattn/go-runewidth"
-	"github.com/muesli/termenv"
 )
 
 // Mode represents the operational mode of the application
@@ -226,13 +224,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.selEndX = clamp(msg.X, 0, m.vp.Width-1)
 						m.selEndY = clamp(msg.Y-vpTopY, 0, m.vp.Height-1)
 						if len(m.contentPlainLines) > 0 {
-							if text := m.extractSelectedText(); strings.TrimSpace(text) != "" {
-								// Copy via OSC52 (termenv) and native clipboard
-								cmds = append(cmds,
-									func() tea.Msg { termenv.Copy(text); return nil },
-									func() tea.Msg { _ = clipboard.WriteAll(text); return nil },
-								)
-								m = m.setError("Copied selection to clipboard")
+							if selected := m.extractSelectedText(); strings.TrimSpace(selected) != "" {
+								if cmd := copySelectionCmd(selected); cmd != nil {
+									cmds = append(cmds, cmd)
+								}
 							}
 						}
 						m.selecting = false
@@ -517,6 +512,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 				m = m.updateFollowTail()
 			}
+		}
+
+	case clipboardResultMsg:
+		if msg.message != "" {
+			m = m.setError(msg.message)
 		}
 
 	case tickMsg:
